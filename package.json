@@ -1,0 +1,20 @@
+{
+  "name": "yuecx-assistant",
+  "version": "1.0.0",
+  "description": "粤出行城际出行助手",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "crawl:hot": "node crawler.js --mode hot",
+    "crawl:full": "node crawler.js --mode full",
+    "crawl:meta": "node crawler.js --mode meta",
+    "migrate": "node db.js --migrate"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.13.0"
+  }
+}

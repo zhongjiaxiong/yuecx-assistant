@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: yuecx-assistant
+    runtime: node
+    plan: free
+    rootDir: yuecx
+    buildCommand: npm ci
+    startCommand: node server.js
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: LLM_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://dashscope.aliyuncs.com/compatible-mode/v1
+      - key: LLM_MODEL
+        value: qwen-max
+      - key: YUECX_HOST
+        value: https://15676888-api.ylxweb.com
+      - key: YUECX_CORP_ID
+        value: ycx
+      - key: YUECX_APPID
+        value: wx44d254291f27af7c
+      - key: NODE_ENV
+        value: production

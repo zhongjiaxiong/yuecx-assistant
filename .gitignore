@@ -1,0 +1,6 @@
+node_modules/
+data/
+.env
+*.wxapkg
+source/
+decrypted_app.wxapkg

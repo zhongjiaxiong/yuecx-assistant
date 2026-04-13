@@ -1,0 +1,68 @@
+/**
+ * 粤出行城际出行助手 — Express API 服务
+ * POST /api/chat  — 对话接口
+ * GET  /          — 聊天页面
+ * GET  /api/health — 健康检查
+ */
+
+const express = require("express");
+const path = require("path");
+const { chat, buildSystemPrompt } = require("./agent");
+
+const app = express();
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
+
+// sessionId → messages[]
+const sessions = new Map();
+const SESSION_TTL = 60 * 60 * 1000; // 1h
+
+function getOrCreateSession(sessionId) {
+  if (sessions.has(sessionId)) {
+    const s = sessions.get(sessionId);
+    s.lastAccess = Date.now();
+    return s.messages;
+  }
+  const messages = [{ role: "system", content: buildSystemPrompt() }];
+  sessions.set(sessionId, { messages, lastAccess: Date.now() });
+  return messages;
+}
+
+// Periodic cleanup
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, s] of sessions) {
+    if (now - s.lastAccess > SESSION_TTL) sessions.delete(id);
+  }
+}, 5 * 60 * 1000);
+
+app.post("/api/chat", async (req, res) => {
+  const { sessionId, message } = req.body;
+  if (!sessionId || !message) {
+    return res.status(400).json({ error: "sessionId 和 message 必填" });
+  }
+
+  const messages = getOrCreateSession(sessionId);
+  messages.push({ role: "user", content: message });
+
+  try {
+    const reply = await chat(messages);
+    res.json({ reply });
+  } catch (err) {
+    console.error("Chat error:", err);
+    res.status(500).json({ error: "服务异常，请稍后重试" });
+  }
+});
+
+app.get("/api/health", (req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString() });
+});
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

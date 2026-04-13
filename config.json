@@ -1,0 +1,42 @@
+{
+  "llm": {
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "apiKey": "sk-67982bb159044720a4bb8abe03fdcc34",
+    "model": "qwen-max"
+  },
+  "yuecx": {
+    "host": "https://15676888-api.ylxweb.com",
+    "corpID": "ycx",
+    "appid": "wx44d254291f27af7c",
+    "version": "2.15.255"
+  },
+  "cache": {
+    "dataDir": "./data",
+    "maxAgeMinutes": 30
+  },
+  "scoring": {
+    "defaultWeights": {
+      "time": 0.40,
+      "price": 0.20,
+      "station": 0.25,
+      "seat": 0.15
+    },
+    "estimatedTripMinutes": 150,
+    "timeWindowMinutes": 120,
+    "asapWindowMinutes": 180
+  },
+  "routes": {
+    "gz_to_sz": {
+      "startCityId": "020",
+      "endCityId": "440300",
+      "label": "广州→深圳",
+      "filePrefix": "gz_to_sz"
+    },
+    "sz_to_gz": {
+      "startCityId": "440300",
+      "endCityId": "020",
+      "label": "深圳→广州",
+      "filePrefix": "sz_to_gz"
+    }
+  }
+}
