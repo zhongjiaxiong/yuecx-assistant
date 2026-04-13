@@ -23,8 +23,12 @@ function timeToMinutes(t) {
   return h * 60 + m;
 }
 
+function nowBeijing() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+}
+
 function nowMinutes() {
-  const n = new Date();
+  const n = nowBeijing();
   return n.getHours() * 60 + n.getMinutes();
 }
 

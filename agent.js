@@ -11,8 +11,12 @@ const LLM_API_KEY = process.env.LLM_API_KEY || "";
 const LLM_MODEL = process.env.LLM_MODEL || "qwen-max";
 const MAX_TOOL_ROUNDS = 8;
 
+function nowBeijing() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+}
+
 function buildSystemPrompt() {
-  const now = new Date();
+  const now = nowBeijing();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
@@ -23,6 +27,11 @@ function buildSystemPrompt() {
 
 ⚠ 重要: 工具参数 startCity/endCity 只能传「城市名」（如"深圳""广州"），不能带区/镇/街道（如"深圳南山"会导致查不到）。用户说"深圳南山"时你应该拆分为 startCity="深圳" + preferBoarding=["南山"]。
 
+⚡ 效率优先:
+- 收齐出发城市+到达城市+日期后，直接调 score_and_rank（它内部会自动查询班次+评分排序，一步完成）。
+- 不要先调 search_intervals 再调 score_and_rank，这会多一轮调用导致变慢。search_intervals 只在用户需要看原始班次列表时才单独用。
+- 每轮尽量只调一个工具，减少往返。
+
 核心行为:
 1. 先收集完关键信息再查询，一次性问齐缺少的信息:
    - 必需: 出发城市、到达城市、出行日期（哪天走）。
@@ -30,7 +39,7 @@ function buildSystemPrompt() {
    - 用户没说日期时不要默认今天，要问"你打算什么时候走？今天、明天、还是哪天？"。
    - 用户说了日期后，时间偏好可默认 asap，但如果用户没说具体时间也可以问一下"大概几点出发？"。
    - 所有缺少的信息可以合并在一个问题里问，比如: "你打算哪天走？大概几点？从深圳哪个区出发，去广州哪个区？"
-   - ⚠ 在收齐出发城市、到达城市、日期之前，不要调用 search_intervals 或 score_and_rank。
+   - ⚠ 在收齐出发城市、到达城市、日期之前，不要调用任何查询工具。
 2. 对齐出发和到达的区域粒度:
    - 出发侧: 用户只说城市（如"我在深圳"）→ 追问具体区域（"你在深圳哪个区？南山、福田、宝安？"）。说到区/地标（如"南山""科技园""软件园"）→ 作为 preferBoarding 关键词。
    - 到达侧: 同样，用户只说"去广州"→ 追问"去广州哪里？天河、越秀、番禺？"。说到区/地标→ 作为 preferDropoff 关键词。
