@@ -73,19 +73,26 @@ app.post("/api/stt", upload.single("audio"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "缺少音频文件" });
 
   try {
-    const FormData = (await import("formdata-node")).FormData;
-    const { Blob } = (await import("buffer"));
+    const mime = req.file.mimetype || "audio/webm";
+    const b64 = req.file.buffer.toString("base64");
+    const dataUri = `data:${mime};base64,${b64}`;
 
-    const form = new FormData();
-    const ext = (req.file.mimetype || "audio/webm").includes("mp4") ? "m4a" : "webm";
-    form.set("file", new Blob([req.file.buffer], { type: req.file.mimetype }), `audio.${ext}`);
-    form.set("model", "paraformer-v2");
-    form.set("language", "zh");
-
-    const resp = await fetch(`${LLM_BASE_URL}/audio/transcriptions`, {
+    const resp = await fetch(`${LLM_BASE_URL}/chat/completions`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${LLM_API_KEY}` },
-      body: form,
+      headers: {
+        Authorization: `Bearer ${LLM_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "qwen3-asr-flash",
+        messages: [
+          {
+            role: "user",
+            content: [{ type: "input_audio", input_audio: { data: dataUri } }],
+          },
+        ],
+        stream: false,
+      }),
     });
 
     if (!resp.ok) {
@@ -95,7 +102,8 @@ app.post("/api/stt", upload.single("audio"), async (req, res) => {
     }
 
     const data = await resp.json();
-    res.json({ text: data.text || "" });
+    const text = data.choices?.[0]?.message?.content || "";
+    res.json({ text });
   } catch (err) {
     console.error("STT error:", err);
     res.status(500).json({ error: "语音识别异常" });
