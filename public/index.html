@@ -157,6 +157,9 @@
     <div class="hint">广东省城际巴士智能查询 · 实时数据</div>
   </div>
   <div id="input-bar">
+    <button id="mic-btn" title="语音输入">
+      <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm-1-9a1 1 0 1 1 2 0v6a1 1 0 1 1-2 0V5zm6 6a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V20H8v2h8v-2h-3v-2.07A7 7 0 0 0 19 11h-2z"/></svg>
+    </button>
     <textarea id="input" rows="1" placeholder="输入你的问题..." enterkeyhint="send"></textarea>
     <button id="send-btn">发送</button>
   </div>
@@ -166,8 +169,75 @@
   var messagesEl = document.getElementById('messages');
   var inputEl = document.getElementById('input');
   var sendBtn = document.getElementById('send-btn');
+  var micBtn = document.getElementById('mic-btn');
   var sessionId = 's_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   var sending = false;
+
+  // --- Speech Recognition ---
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var recognition = null;
+  var isRecording = false;
+
+  if (SpeechRecognition) {
+    recognition = new SpeechRecognition();
+    recognition.lang = 'zh-CN';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    var finalTranscript = '';
+
+    recognition.onresult = function(e) {
+      var interim = '';
+      for (var i = e.resultIndex; i < e.results.length; i++) {
+        var t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          finalTranscript += t;
+        } else {
+          interim += t;
+        }
+      }
+      inputEl.value = finalTranscript + interim;
+      autoGrow();
+    };
+
+    recognition.onerror = function(e) {
+      if (e.error === 'no-speech') return;
+      console.warn('Speech recognition error:', e.error);
+      stopRecording();
+    };
+
+    recognition.onend = function() {
+      if (isRecording) {
+        // Auto-stopped by browser (e.g. silence timeout), restart to keep listening
+        try { recognition.start(); } catch(_) { stopRecording(); }
+      }
+    };
+  } else {
+    micBtn.classList.add('unsupported');
+  }
+
+  function startRecording() {
+    if (!recognition || isRecording) return;
+    finalTranscript = inputEl.value;
+    isRecording = true;
+    micBtn.classList.add('recording');
+    micBtn.title = '点击停止';
+    try { recognition.start(); } catch(_) {}
+  }
+
+  function stopRecording() {
+    if (!recognition) return;
+    isRecording = false;
+    micBtn.classList.remove('recording');
+    micBtn.title = '语音输入';
+    try { recognition.stop(); } catch(_) {}
+    inputEl.focus();
+  }
+
+  micBtn.addEventListener('click', function() {
+    if (isRecording) { stopRecording(); }
+    else { startRecording(); }
+  });
 
   function scrollBottom() {
     requestAnimationFrame(function() { messagesEl.scrollTop = messagesEl.scrollHeight; });
@@ -383,6 +453,7 @@
   }
 
   async function send() {
+    if (isRecording) stopRecording();
     var text = inputEl.value.trim();
     if (!text || sending) return;
     sending = true;
