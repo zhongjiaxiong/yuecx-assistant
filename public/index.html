@@ -105,7 +105,7 @@
   .rec-hint { color: rgba(255,255,255,0.7); font-size: 13px; }
 
   /* Route Results Card */
-  .rr-wrap { margin-top: 8px; }
+  .rr-wrap { margin-top: 8px; word-break: normal; white-space: normal; }
   .rr-item {
     display: flex; align-items: stretch; margin-bottom: 8px;
     border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff;
@@ -118,11 +118,17 @@
   }
   .rr-body { flex: 1; padding: 8px 10px; min-width: 0; }
   .rr-top { display: flex; align-items: baseline; gap: 6px; }
-  .rr-time { font-size: 18px; font-weight: 700; color: #222; }
-  .rr-route { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rr-bottom { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 12px; color: #666; }
+  .rr-time { font-size: 18px; font-weight: 700; color: #222; white-space: nowrap; flex-shrink: 0; }
+  .rr-route { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .rr-bottom { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 12px; color: #666; flex-wrap: wrap; }
   .rr-price { font-weight: 600; color: #f5222d; }
   .rr-seats { color: #999; }
+  .rr-source {
+    display: inline-block; padding: 1px 5px; border-radius: 3px;
+    font-size: 10px; font-weight: 600; line-height: 1.4;
+  }
+  .rr-source.src-yuecx { background: #e6f7ff; color: #1890ff; }
+  .rr-source.src-busboss { background: #fff7e6; color: #fa8c16; }
   .rr-warn { color: #faad14; font-size: 11px; }
   .rr-right { display: flex; align-items: center; padding: 0 10px; flex-shrink: 0; }
   .rr-book-btn {
@@ -133,7 +139,7 @@
   .rr-footer { font-size: 12px; color: #999; padding: 2px 0; }
 
   /* Booking Card */
-  .bk-card { margin-top: 10px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fafffe; }
+  .bk-card { margin-top: 10px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fafffe; word-break: normal; white-space: normal; }
   .bk-header { background: var(--green); color: #fff; padding: 10px 14px; font-size: 14px; font-weight: 600; }
   .bk-body { padding: 10px 14px; font-size: 13px; line-height: 1.8; color: #333; }
   .bk-row { display: flex; gap: 6px; }
@@ -152,9 +158,9 @@
 </head>
 <body>
 <div id="app">
-  <header>粤程助手</header>
+  <header>粤程助手 · 聚合比价</header>
   <div id="messages">
-    <div class="hint">广东省城际巴士智能查询 · 实时数据</div>
+    <div class="hint">广东省城际巴士聚合平台 · 多源比价 · 实时数据</div>
   </div>
   <div id="input-bar">
     <button class="ib-toggle" id="mode-toggle" title="切换语音/文字">
@@ -355,16 +361,20 @@
     return frag;
   }
 
+  var SOURCE_LABELS = { yuecx: '粤出行', busboss: '如约城际' };
+
   function buildRouteResults(data) {
     var items = data.items || data;
     if (!Array.isArray(items)) return document.createTextNode('');
     var wrap = document.createElement('div'); wrap.className = 'rr-wrap';
     items.forEach(function(it, idx) {
+      var srcClass = it.source ? 'src-' + it.source : 'src-yuecx';
+      var srcLabel = SOURCE_LABELS[it.source] || it.source || '粤出行';
       var el = document.createElement('div'); el.className = 'rr-item' + (it.warn ? ' has-warn' : '');
       el.innerHTML =
         '<div class="rr-rank">' + (idx+1) + '</div>' +
         '<div class="rr-body">' +
-          '<div class="rr-top"><span class="rr-time">' + esc(it.time||'') + '</span><span class="rr-route">' + esc(shortenStation(it.boarding)) + ' → ' + esc(shortenStation(it.dropoff)) + '</span></div>' +
+          '<div class="rr-top"><span class="rr-time">' + esc(it.time||'') + '</span><span class="rr-source ' + srcClass + '">' + esc(srcLabel) + '</span><span class="rr-route">' + esc(shortenStation(it.boarding)) + ' → ' + esc(shortenStation(it.dropoff)) + '</span></div>' +
           '<div class="rr-bottom"><span class="rr-price">¥' + esc(it.price||'') + '</span><span class="rr-seats">余' + (it.seats!=null?it.seats:'?') + '座</span>' +
           (it.warn ? '<span class="rr-warn">⚠ ' + esc(it.warn) + '</span>' : '') + '</div>' +
         '</div>' +
@@ -380,19 +390,21 @@
 
   function buildBookingCard(info) {
     var card = document.createElement('div'); card.className = 'bk-card';
+    var miniapp = info.miniappName || SOURCE_LABELS[info.source] || '粤出行城际巴士';
     var bodyHtml = '';
     [['路线',info.route],['日期',info.date],['上车',(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||'')],
-     ['下车',info.dropoffStation],['票价',info.priceYuan?'¥'+info.priceYuan:''],['余票',info.residue!=null?info.residue+'张':'']
+     ['下车',info.dropoffStation],['票价',info.priceYuan?'¥'+info.priceYuan:''],['余票',info.residue!=null?info.residue+'张':''],
+     ['来源', miniapp]
     ].forEach(function(r){ if(r[1]) bodyHtml += '<div class="bk-row"><span class="bk-label">'+esc(r[0])+'</span><span class="bk-val">'+esc(r[1])+'</span></div>'; });
 
     card.innerHTML =
       '<div class="bk-header">🎫 订票信息</div>' +
       '<div class="bk-body">' + bodyHtml + '</div>' +
       '<div class="bk-actions"><button class="bk-copy">📋 复制订票信息</button></div>' +
-      '<div class="bk-guide">📱 微信搜「<b>粤出行城际巴士</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找 <b>' + esc(info.fromTime||'') + '</b> 班次下单</div>';
+      '<div class="bk-guide">📱 微信搜「<b>' + esc(miniapp) + '</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找 <b>' + esc(info.fromTime||'') + '</b> 班次下单</div>';
 
     var copyBtn = card.querySelector('.bk-copy');
-    var copyText = [info.route,info.date,(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''),'下车: '+(info.dropoffStation||''),'票价: ¥'+(info.priceYuan||'')].join('\n');
+    var copyText = [info.route,info.date,(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''),'下车: '+(info.dropoffStation||''),'票价: ¥'+(info.priceYuan||''),'微信搜: '+miniapp].join('\n');
     copyBtn.addEventListener('click', function() {
       navigator.clipboard.writeText(copyText).then(function() {
         copyBtn.textContent = '✅ 已复制'; copyBtn.classList.add('copied');
@@ -459,7 +471,7 @@
   inputEl.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
   inputEl.addEventListener('input', autoGrow);
 
-  addMessage('你好！我是粤程助手 🚌\n\n告诉我从哪到哪、哪天走，帮你找最合适的班次。\n\n例如："明天从深圳南山去广州天河"', 'bot');
+  addMessage('你好！我是粤程助手 🚌\n\n我同时从多个平台（粤出行、如约城际等）查询班次，帮你比价找到最优选择。\n\n告诉我从哪到哪、哪天走，例如："明天从深圳南山去广州天河"', 'bot');
   fetch('/api/health').catch(function(){});
 })();
 </script>
