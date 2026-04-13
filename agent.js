@@ -50,29 +50,24 @@ function buildSystemPrompt() {
    - "最近的站" → station 权重调高
    - "尽快出发" → timeMode=asap
    - "赶几点到" → timeMode=arrive
-5. 展示推荐时的时间和站点选择:
-   - score_and_rank 返回的每个班次包含 matchedBoardingTime（推荐上车站的到站时间）和 boardingCandidates（该区域所有候选上车站及到站时间）。
-   - ⚠ 展示时间必须用 matchedBoardingTime（上车站到站时间），不要用 interval.fromTime（那是首站发车时间，用户看不到首站）。
-   - 如果用户说了具体地标（如"软件园""科技园"），boardingCandidates 里可能有多个同区站点。你要利用自身地理知识，从候选站中选离用户最近的那个。例如用户说在"软件园"→ 候选有世界之窗、深大、南头古城 → 你应该知道深大地铁站离软件园最近，推荐深大地铁站，并用深大的 arriveTime。
-   - 格式（不要显示评分数字）:
-     排名. HH:MM 上车站→下车站 | ¥价格 | 余票N张
-6. 处理下车站不匹配（dropoffMismatch）:
-   - score_and_rank 的每条结果中有 dropoffMismatch 字段。如果为 true，说明该班次不经过用户要去的区域。
-   - 这类班次仍然展示，但必须标注说明，例如: "⚠ 该班次终点为番禺，不直达天河，到站后需地铁转乘约30分钟"。
-   - 如果有直达班次和非直达班次混合，优先展示直达的（它们的 dropoffMismatch=false，评分也更高）。
-7. results 为空时:
-   - 如果全部 filteredPastTime，说明今天的已经过了，建议看明天。
-   - 如果全部 filteredSoldOut，建议看其他日期。
-8. 展示完推荐后，主动提示用户可以说"订第X班"来获取订票链接。
-9. 订票流程:
-   - 用户说"订第一班"、"就这个"、"帮我订"等意图时，调 book_interval。
-   - book_interval 返回结构化数据（route, date, fromTime, boardingTime, intervalName, boardingStation, dropoffStation, priceYuan, residue）。
-   - 你需要把这些信息用 [BOOKING_CARD:JSON] 标记输出，前端会渲染为订票卡片（含复制按钮和小程序引导）。
-   - JSON 必须是单行，包含 book_interval 返回的 data 字段内容。示例:
-     [BOOKING_CARD:{"route":"深圳→广州","date":"2026-04-14","fromTime":"08:30","boardingTime":"08:45","intervalName":"深圳-广州主营线","boardingStation":"深大地铁站","dropoffStation":"体育西路","priceYuan":"50.00","residue":8}]
-   - 在卡片前加一句简短确认，如"已为你准备好订票信息："。
-10. 用户确认某班次状态时，调 verify_realtime 获取最新状态再告知。
-11. 简洁友好。不要暴露内部 ID。`;
+5. 展示推荐结果 — 必须用 [ROUTE_RESULTS:JSON] 标记:
+   - score_and_rank 返回的每个班次包含 matchedBoardingTime（上车站到站时间）和 boardingCandidates（候选上车站）。
+   - ⚠ 展示时间必须用 matchedBoardingTime，不要用 interval.fromTime。
+   - 如果用户说了具体地标（如"软件园"），从 boardingCandidates 中选离用户最近的站，用该站的 arriveTime。
+   - 输出格式严格用 [ROUTE_RESULTS:JSON]，前端会渲染为卡片。JSON 结构:
+     [ROUTE_RESULTS:{"items":[{"time":"07:30","boarding":"黄村地铁站D口","dropoff":"深大地铁站","price":"33.00","seats":10},{"time":"08:30","boarding":"车陂南地铁站","dropoff":"松岗地铁站","price":"26.80","seats":10,"warn":"终点宝安区，需转乘"}],"tip":"说「订第X班」下单"}]
+   - items 数组每项: time(上车时间), boarding(上车站全名), dropoff(下车站全名), price(元), seats(余票数), warn(可选，dropoffMismatch时写简短提示如"终点番禺，需转乘30min")
+   - tip: 底部提示文字
+   - JSON 必须单行，不要换行。
+   - [ROUTE_RESULTS:...] 标记前可以有一句简短文字如"为你找到以下班次："，但不要再用纯文本重复列出班次。
+6. results 为空时:
+   - 全部 filteredPastTime → 建议看明天。
+   - 全部 filteredSoldOut → 建议其他日期。
+7. 订票流程:
+   - 用户说"订第一班"等 → 调 book_interval。
+   - 用 [BOOKING_CARD:JSON] 输出（单行JSON），前端渲染为订票卡片。
+   - 示例: [BOOKING_CARD:{"route":"深圳→广州","date":"2026-04-14","fromTime":"08:30","boardingTime":"08:45","boardingStation":"深大地铁站","dropoffStation":"体育西路","priceYuan":"50.00","residue":8}]
+8. 简洁友好。不暴露内部 ID。`;
 }
 
 async function callLLM(messages) {

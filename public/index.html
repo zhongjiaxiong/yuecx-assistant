@@ -15,6 +15,8 @@
     --border: #e5e5e5;
     --input-bg: #fff;
     --shadow: rgba(0,0,0,0.06);
+    --green: #07c160;
+    --green-light: #e8f8ee;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: var(--bg); }
@@ -23,9 +25,8 @@
     background: var(--chat-bg); box-shadow: 0 0 20px var(--shadow);
   }
   header {
-    flex-shrink: 0; padding: 14px 16px; background: #07c160; color: #fff;
+    flex-shrink: 0; padding: 14px 16px; background: var(--green); color: #fff;
     font-size: 17px; font-weight: 600; text-align: center;
-    -webkit-user-select: none; user-select: none;
   }
   #messages {
     flex: 1; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch;
@@ -34,7 +35,7 @@
   .msg { display: flex; margin-bottom: 14px; gap: 8px; animation: fadeIn .2s ease; }
   .msg.user { flex-direction: row-reverse; }
   .bubble {
-    max-width: 78%; padding: 10px 14px; border-radius: 16px; line-height: 1.6;
+    max-width: 82%; padding: 10px 14px; border-radius: 16px; line-height: 1.6;
     font-size: 15px; word-break: break-word; white-space: pre-wrap; position: relative;
   }
   .msg.bot .bubble { background: var(--bot-bubble); color: var(--bot-text); border: 1px solid var(--border); border-top-left-radius: 4px; }
@@ -44,7 +45,7 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 18px; background: #e8e8e8;
   }
-  .msg.user .avatar { background: #07c160; color: #fff; }
+  .msg.user .avatar { background: var(--green); color: #fff; }
   .typing .bubble::after {
     content: ''; display: inline-block; width: 6px; height: 6px;
     background: #999; border-radius: 50%; margin-left: 4px;
@@ -61,40 +62,92 @@
     font-size: 15px; outline: none; background: var(--input-bg); resize: none;
     min-height: 40px; max-height: 120px; line-height: 1.4;
   }
-  #input:focus { border-color: #07c160; }
+  #input:focus { border-color: var(--green); }
   #send-btn {
     flex-shrink: 0; width: 64px; border: none; border-radius: 20px;
-    background: #07c160; color: #fff; font-size: 15px; font-weight: 600;
+    background: var(--green); color: #fff; font-size: 15px; font-weight: 600;
     cursor: pointer; transition: opacity .15s;
   }
   #send-btn:disabled { opacity: .4; cursor: default; }
   #send-btn:active:not(:disabled) { opacity: .7; }
+
+  /* Mic (voice input) button */
+  #mic-btn {
+    flex-shrink: 0; width: 40px; height: 40px; border: none; border-radius: 50%;
+    background: transparent; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; transition: background .15s; position: relative;
+  }
+  #mic-btn:hover { background: #f0f0f0; }
+  #mic-btn svg { width: 22px; height: 22px; fill: #666; transition: fill .15s; }
+  #mic-btn.recording { background: #fde8e8; }
+  #mic-btn.recording svg { fill: #e53935; }
+  #mic-btn.recording::after {
+    content: ''; position: absolute; inset: -4px; border-radius: 50%;
+    border: 2px solid #e53935; animation: mic-pulse 1.2s ease-out infinite;
+  }
+  #mic-btn.unsupported { display: none; }
+  @keyframes mic-pulse { 0% { opacity: .8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.5); } }
+
   .hint { text-align: center; color: #999; font-size: 12px; padding: 8px 0 4px; }
-  .booking-card {
-    margin-top: 10px; border: 1px solid #e5e5e5; border-radius: 12px;
+
+  /* Route Results Card */
+  .rr-wrap { margin-top: 8px; }
+  .rr-item {
+    display: flex; align-items: stretch; gap: 0; margin-bottom: 8px;
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+    background: #fff; cursor: pointer; transition: border-color .15s;
+  }
+  .rr-item:active { border-color: var(--green); }
+  .rr-item.has-warn { border-left: 3px solid #faad14; }
+  .rr-rank {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; flex-shrink: 0; background: var(--green-light);
+    font-size: 14px; font-weight: 700; color: var(--green);
+  }
+  .rr-body { flex: 1; padding: 8px 10px; min-width: 0; }
+  .rr-top { display: flex; align-items: baseline; gap: 6px; }
+  .rr-time { font-size: 18px; font-weight: 700; color: #222; }
+  .rr-route { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rr-bottom { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 12px; color: #666; }
+  .rr-price { font-weight: 600; color: #f5222d; }
+  .rr-seats { color: #999; }
+  .rr-warn { color: #faad14; font-size: 11px; }
+  .rr-right {
+    display: flex; align-items: center; padding: 0 10px; flex-shrink: 0;
+  }
+  .rr-book-btn {
+    padding: 6px 10px; border: 1px solid var(--green); border-radius: 14px;
+    background: #fff; color: var(--green); font-size: 12px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; transition: all .15s;
+  }
+  .rr-book-btn:active { background: var(--green); color: #fff; }
+  .rr-footer { font-size: 12px; color: #999; padding: 2px 0; }
+
+  /* Booking Card */
+  .bk-card {
+    margin-top: 10px; border: 1px solid var(--border); border-radius: 12px;
     overflow: hidden; background: #fafffe;
   }
-  .booking-card-header {
-    background: #07c160; color: #fff; padding: 10px 14px;
-    font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px;
+  .bk-header {
+    background: var(--green); color: #fff; padding: 10px 14px;
+    font-size: 14px; font-weight: 600;
   }
-  .booking-card-body { padding: 12px 14px; font-size: 14px; line-height: 1.8; color: #333; }
-  .booking-card-row { display: flex; gap: 6px; }
-  .booking-card-label { color: #999; flex-shrink: 0; min-width: 56px; }
-  .booking-card-value { color: #333; font-weight: 500; }
-  .booking-card-actions { padding: 10px 14px; display: flex; gap: 8px; border-top: 1px solid #f0f0f0; }
-  .booking-copy-btn {
-    flex: 1; padding: 10px; border: none; border-radius: 8px;
-    background: #07c160; color: #fff; font-size: 14px; font-weight: 600;
+  .bk-body { padding: 10px 14px; font-size: 13px; line-height: 1.8; color: #333; }
+  .bk-row { display: flex; gap: 6px; }
+  .bk-label { color: #999; flex-shrink: 0; min-width: 48px; }
+  .bk-val { color: #333; font-weight: 500; }
+  .bk-actions { padding: 10px 14px; border-top: 1px solid #f0f0f0; }
+  .bk-copy {
+    width: 100%; padding: 10px; border: none; border-radius: 8px;
+    background: var(--green); color: #fff; font-size: 14px; font-weight: 600;
     cursor: pointer; transition: opacity .15s;
   }
-  .booking-copy-btn:active { opacity: .7; }
-  .booking-copy-btn.copied { background: #999; }
-  .booking-guide {
-    margin-top: 8px; padding: 10px 14px; background: #f8f8f8; border-radius: 8px;
-    font-size: 12px; color: #666; line-height: 1.7;
+  .bk-copy:active { opacity: .7; }
+  .bk-copy.copied { background: #999; }
+  .bk-guide {
+    padding: 10px 14px; background: #f8f8f8; font-size: 12px; color: #666; line-height: 1.7;
   }
-  .booking-guide-title { font-weight: 600; color: #333; margin-bottom: 4px; }
+  .bk-guide b { color: #333; }
 </style>
 </head>
 <body>
@@ -120,78 +173,151 @@
     requestAnimationFrame(function() { messagesEl.scrollTop = messagesEl.scrollHeight; });
   }
 
+  function esc(s) { var d = document.createElement('span'); d.textContent = s; return d.innerHTML; }
+
+  function shortenStation(name) {
+    if (!name) return '';
+    return name
+      .replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
+      .replace(/地铁站[A-Z]?\d*口?/g, '站')
+      .replace(/公交站/g, '站')
+      .replace(/旁边|路边|前面|出来|左转/g, '')
+      .trim();
+  }
+
   function renderBotContent(text) {
-    var parts = text.split(/\[BOOKING_CARD:([\s\S]*?)\]/g);
     var frag = document.createDocumentFragment();
-    for (var i = 0; i < parts.length; i++) {
-      if (i % 2 === 0) {
-        if (parts[i]) {
-          var span = document.createElement('span');
-          span.textContent = parts[i];
-          frag.appendChild(span);
-        }
-      } else {
-        try {
-          var info = JSON.parse(parts[i].trim());
-          frag.appendChild(buildBookingCard(info));
-        } catch(e) {
-          var span2 = document.createElement('span');
-          span2.textContent = parts[i];
-          frag.appendChild(span2);
-        }
+    var re = /\[(ROUTE_RESULTS|BOOKING_CARD):([\s\S]*?)\]/g;
+    var last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) {
+        var span = document.createElement('span');
+        span.textContent = text.slice(last, m.index);
+        frag.appendChild(span);
       }
+      try {
+        var data = JSON.parse(m[2].trim());
+        if (m[1] === 'ROUTE_RESULTS') frag.appendChild(buildRouteResults(data));
+        else frag.appendChild(buildBookingCard(data));
+      } catch(e) {
+        var s2 = document.createElement('span');
+        s2.textContent = m[0];
+        frag.appendChild(s2);
+      }
+      last = re.lastIndex;
+    }
+    if (last < text.length) {
+      var tail = document.createElement('span');
+      tail.textContent = text.slice(last);
+      frag.appendChild(tail);
     }
     return frag;
   }
 
+  function buildRouteResults(data) {
+    var items = data.items || data;
+    if (!Array.isArray(items)) return document.createTextNode('');
+    var wrap = document.createElement('div');
+    wrap.className = 'rr-wrap';
+    items.forEach(function(it, idx) {
+      var el = document.createElement('div');
+      el.className = 'rr-item' + (it.warn ? ' has-warn' : '');
+
+      var rank = document.createElement('div');
+      rank.className = 'rr-rank';
+      rank.textContent = idx + 1;
+
+      var body = document.createElement('div');
+      body.className = 'rr-body';
+
+      var top = document.createElement('div');
+      top.className = 'rr-top';
+      var time = document.createElement('span');
+      time.className = 'rr-time';
+      time.textContent = it.time || '';
+      var route = document.createElement('span');
+      route.className = 'rr-route';
+      route.textContent = shortenStation(it.boarding) + ' → ' + shortenStation(it.dropoff);
+      top.appendChild(time);
+      top.appendChild(route);
+
+      var bot = document.createElement('div');
+      bot.className = 'rr-bottom';
+      var price = document.createElement('span');
+      price.className = 'rr-price';
+      price.textContent = '¥' + (it.price || '');
+      var seats = document.createElement('span');
+      seats.className = 'rr-seats';
+      seats.textContent = '余' + (it.seats != null ? it.seats : '?') + '座';
+      bot.appendChild(price);
+      bot.appendChild(seats);
+      if (it.warn) {
+        var warn = document.createElement('span');
+        warn.className = 'rr-warn';
+        warn.textContent = '⚠ ' + it.warn;
+        bot.appendChild(warn);
+      }
+
+      body.appendChild(top);
+      body.appendChild(bot);
+
+      var right = document.createElement('div');
+      right.className = 'rr-right';
+      var btn = document.createElement('button');
+      btn.className = 'rr-book-btn';
+      btn.textContent = '订票';
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        inputEl.value = '订第' + (idx + 1) + '班';
+        send();
+      });
+      right.appendChild(btn);
+
+      el.appendChild(rank);
+      el.appendChild(body);
+      el.appendChild(right);
+      wrap.appendChild(el);
+    });
+    if (data.tip) {
+      var footer = document.createElement('div');
+      footer.className = 'rr-footer';
+      footer.textContent = data.tip;
+      wrap.appendChild(footer);
+    }
+    return wrap;
+  }
+
   function buildBookingCard(info) {
     var card = document.createElement('div');
-    card.className = 'booking-card';
+    card.className = 'bk-card';
 
     var header = document.createElement('div');
-    header.className = 'booking-card-header';
+    header.className = 'bk-header';
     header.textContent = '🎫 订票信息';
     card.appendChild(header);
 
     var body = document.createElement('div');
-    body.className = 'booking-card-body';
-    var rows = [
-      ['路线', info.route || ''],
-      ['日期', info.date || ''],
-      ['班次', info.fromTime ? (info.fromTime + ' ' + (info.intervalName || '')) : (info.intervalName || '')],
-      ['上车站', info.boardingStation || ''],
-      ['下车站', info.dropoffStation || ''],
-      ['票价', info.priceYuan ? ('¥' + info.priceYuan) : ''],
-      ['余票', info.residue != null ? (info.residue + '张') : ''],
-    ];
-    rows.forEach(function(r) {
+    body.className = 'bk-body';
+    [
+      ['路线', info.route], ['日期', info.date],
+      ['上车', (info.boardingTime || info.fromTime || '') + ' ' + (info.boardingStation || '')],
+      ['下车', info.dropoffStation], ['票价', info.priceYuan ? '¥' + info.priceYuan : ''],
+      ['余票', info.residue != null ? info.residue + '张' : ''],
+    ].forEach(function(r) {
       if (!r[1]) return;
       var row = document.createElement('div');
-      row.className = 'booking-card-row';
-      var label = document.createElement('span');
-      label.className = 'booking-card-label';
-      label.textContent = r[0];
-      var value = document.createElement('span');
-      value.className = 'booking-card-value';
-      value.textContent = r[1];
-      row.appendChild(label);
-      row.appendChild(value);
+      row.className = 'bk-row';
+      row.innerHTML = '<span class="bk-label">' + esc(r[0]) + '</span><span class="bk-val">' + esc(r[1]) + '</span>';
       body.appendChild(row);
     });
     card.appendChild(body);
 
     var actions = document.createElement('div');
-    actions.className = 'booking-card-actions';
+    actions.className = 'bk-actions';
     var copyBtn = document.createElement('button');
-    copyBtn.className = 'booking-copy-btn';
+    copyBtn.className = 'bk-copy';
     copyBtn.textContent = '📋 复制订票信息';
-    var copyText = [
-      info.route || '', info.date || '',
-      (info.fromTime || '') + ' ' + (info.intervalName || ''),
-      '上车: ' + (info.boardingStation || ''),
-      '下车: ' + (info.dropoffStation || ''),
-      '票价: ¥' + (info.priceYuan || ''),
-    ].join('\n');
+    var copyText = [info.route, info.date, (info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''), '下车: '+(info.dropoffStation||''), '票价: ¥'+(info.priceYuan||'')].join('\n');
     copyBtn.addEventListener('click', function() {
       navigator.clipboard.writeText(copyText).then(function() {
         copyBtn.textContent = '✅ 已复制';
@@ -203,12 +329,8 @@
     card.appendChild(actions);
 
     var guide = document.createElement('div');
-    guide.className = 'booking-guide';
-    guide.innerHTML = '<div class="booking-guide-title">📱 如何购票</div>'
-      + '1. 微信搜索「<b>粤出行城际巴士</b>」小程序<br>'
-      + '2. 选择 <b>' + (info.route || '').replace('→', ' → ') + '</b><br>'
-      + '3. 选择日期 <b>' + (info.date || '') + '</b><br>'
-      + '4. 找到 <b>' + (info.fromTime || '') + '</b> 的班次下单';
+    guide.className = 'bk-guide';
+    guide.innerHTML = '📱 微信搜「<b>粤出行城际巴士</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找到 <b>' + esc(info.fromTime||'') + '</b> 班次下单';
     card.appendChild(guide);
 
     return card;
@@ -304,7 +426,7 @@
   });
   inputEl.addEventListener('input', autoGrow);
 
-  addMessage('你好！我是粤程助手。\n\n告诉我你想从哪里到哪里，我来帮你找到最合适的城际巴士班次，还可以一键生成订票链接。\n\n例如："我想从广州去深圳" 或 "明天从珠海到佛山最便宜的班次"', 'bot');
+  addMessage('你好！我是粤程助手 🚌\n\n告诉我从哪到哪、哪天走，帮你找最合适的班次。\n\n例如："明天从深圳南山去广州天河"', 'bot');
 
   fetch('/api/health').catch(function(){});
 })();
