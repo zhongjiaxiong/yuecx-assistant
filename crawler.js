@@ -3,6 +3,7 @@
  * 仅保留按需实时查询和城市/路线元数据同步。
  */
 
+require("dotenv/config");
 const crypto = require("crypto");
 const db = require("./db");
 

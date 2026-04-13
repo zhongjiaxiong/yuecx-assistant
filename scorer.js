@@ -52,21 +52,34 @@ function scorePrices(intervals) {
 }
 
 function matchStationList(stations, keywords) {
-  if (!keywords || keywords.length === 0) return { score: 1.0, matched: null };
+  if (!keywords || keywords.length === 0) return { score: 1.0, matched: null, matchedTime: null, allCandidates: null };
   let bestScore = 0;
   let matched = null;
+  let matchedTime = null;
+  const candidates = [];
   for (const st of stations) {
+    let stScore = 0;
     for (const kw of keywords) {
       const kwLower = kw.toLowerCase();
-      if (st.name.toLowerCase().includes(kwLower)) return { score: 1.0, matched: st.name };
-      const district = ADCODE_DISTRICT[st.adcode];
-      if (district && district === kw && 0.7 > bestScore) {
-        bestScore = 0.7;
+      if (st.name.toLowerCase().includes(kwLower)) {
+        stScore = Math.max(stScore, 1.0);
+      } else {
+        const district = ADCODE_DISTRICT[st.adcode];
+        if (district && district === kw) {
+          stScore = Math.max(stScore, 0.7);
+        }
+      }
+    }
+    if (stScore > 0) {
+      candidates.push({ name: st.name, arriveTime: st.arriveTime || "", score: stScore });
+      if (stScore > bestScore) {
+        bestScore = stScore;
         matched = st.name;
+        matchedTime = st.arriveTime || "";
       }
     }
   }
-  return { score: bestScore, matched };
+  return { score: bestScore, matched, matchedTime, allCandidates: candidates.length > 0 ? candidates : null };
 }
 
 function scoreStation(interval, preferBoarding, preferDropoff) {
@@ -74,12 +87,23 @@ function scoreStation(interval, preferBoarding, preferDropoff) {
   const dropoff = matchStationList(interval.dropoffStations || interval.dropoff_stations || [], preferDropoff);
   const hasB = preferBoarding && preferBoarding.length > 0;
   const hasD = preferDropoff && preferDropoff.length > 0;
+
+  const dropoffMismatch = hasD && dropoff.score === 0;
+
   let score;
   if (hasB && hasD) score = boarding.score * 0.5 + dropoff.score * 0.5;
   else if (hasB) score = boarding.score;
   else if (hasD) score = dropoff.score;
   else score = 1.0;
-  return { score, matchedBoarding: boarding.matched, matchedDropoff: dropoff.matched };
+  return {
+    score,
+    matchedBoarding: boarding.matched, matchedBoardingTime: boarding.matchedTime,
+    matchedDropoff: dropoffMismatch ? null : dropoff.matched,
+    matchedDropoffTime: dropoffMismatch ? null : dropoff.matchedTime,
+    boardingCandidates: boarding.allCandidates,
+    dropoffCandidates: dropoffMismatch ? null : dropoff.allCandidates,
+    dropoffMismatch,
+  };
 }
 
 function scoreSeat(residue) {
@@ -115,19 +139,25 @@ function scoreAndRank(opts) {
     const stns = c.iv.boardingStations || c.iv.boarding_stations || [];
     const doff = c.iv.dropoffStations || c.iv.dropoff_stations || [];
     const ivNorm = { ...c.iv, boardingStations: stns, dropoffStations: doff };
-    const { score: stationS, matchedBoarding, matchedDropoff } = scoreStation(ivNorm, preferBoarding, preferDropoff);
-    const final = w.time * c.timeS + w.price * priceScores[i] + w.station * stationS + w.seat * c.seatS;
+    const stResult = scoreStation(ivNorm, preferBoarding, preferDropoff);
+    const stScore = Math.max(stResult.score, 0);
+    const final = w.time * c.timeS + w.price * priceScores[i] + w.station * stScore + w.seat * c.seatS;
     return {
       finalScore: Math.round(final * 100) / 100,
       scores: {
         time: Math.round(c.timeS * 100) / 100,
         price: Math.round(priceScores[i] * 100) / 100,
-        station: Math.round(stationS * 100) / 100,
+        station: Math.round(stScore * 100) / 100,
         seat: Math.round(c.seatS * 100) / 100,
       },
       interval: c.iv,
-      matchedBoarding: matchedBoarding || stns[0]?.name || "",
-      matchedDropoff: matchedDropoff || doff[0]?.name || "",
+      matchedBoarding: stResult.matchedBoarding || stns[0]?.name || "",
+      matchedBoardingTime: stResult.matchedBoardingTime || c.iv.from_time || c.iv.fromTime || "",
+      matchedDropoff: stResult.matchedDropoff || doff[0]?.name || "",
+      matchedDropoffTime: stResult.matchedDropoffTime || "",
+      boardingCandidates: stResult.boardingCandidates,
+      dropoffCandidates: stResult.dropoffCandidates,
+      dropoffMismatch: stResult.dropoffMismatch,
     };
   });
 

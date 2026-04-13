@@ -29,8 +29,8 @@ async function upsertCity(cityId, cityName, source = "yuecx") {
 async function findCityByName(name) {
   const { rows } = await pool.query(
     `SELECT city_id, city_name FROM cities
-     WHERE city_name = $1 OR city_name LIKE $2
-     ORDER BY (city_name = $1) DESC, length(city_name) ASC
+     WHERE city_name = $1 OR city_name LIKE $2 OR $1 LIKE city_name || '%'
+     ORDER BY (city_name = $1) DESC, length(city_name) DESC
      LIMIT 5`,
     [name, `%${name}%`]
   );

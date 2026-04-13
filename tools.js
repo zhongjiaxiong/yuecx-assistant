@@ -281,10 +281,13 @@ const TOOL_SCHEMAS = [
 async function executeTool(name, args) {
   const handler = TOOL_HANDLERS[name];
   if (!handler) return JSON.stringify({ success: false, error: `未知工具: ${name}` });
+  console.log(`[tool] ${name}(${JSON.stringify(args)})`);
   try {
     const result = await handler(args);
+    if (!result.success) console.log(`[tool] ${name} → error:`, result.error);
     return JSON.stringify(result);
   } catch (err) {
+    console.error(`[tool] ${name} threw:`, err.message);
     return JSON.stringify({ success: false, error: err.message });
   }
 }

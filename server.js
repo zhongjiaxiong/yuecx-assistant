@@ -5,6 +5,7 @@
  * GET  /api/health — 健康检查
  */
 
+require("dotenv/config");
 const express = require("express");
 const path = require("path");
 const { chat, buildSystemPrompt } = require("./agent");
