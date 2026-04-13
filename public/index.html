@@ -105,7 +105,7 @@
   .rec-hint { color: rgba(255,255,255,0.7); font-size: 13px; }
 
   /* Route Results Card */
-  .rr-wrap { margin-top: 8px; word-break: normal; white-space: normal; }
+  .rr-wrap { margin-top: 8px; }
   .rr-item {
     display: flex; align-items: stretch; margin-bottom: 8px;
     border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff;
@@ -118,19 +118,11 @@
   }
   .rr-body { flex: 1; padding: 8px 10px; min-width: 0; }
   .rr-top { display: flex; align-items: baseline; gap: 6px; }
-  .rr-time { font-size: 18px; font-weight: 700; color: #222; white-space: nowrap; flex-shrink: 0; }
-  .rr-badge { font-size: 10px; color: #fff; background: var(--green); border-radius: 3px; padding: 1px 4px; white-space: nowrap; flex-shrink: 0; }
-  .rr-route { font-size: 13px; color: #555; margin-top: 2px; line-height: 1.4; }
-  .rr-route .arr { color: #999; margin: 0 2px; }
-  .rr-bottom { display: flex; align-items: center; gap: 8px; margin-top: 4px; font-size: 12px; color: #666; flex-wrap: wrap; }
+  .rr-time { font-size: 18px; font-weight: 700; color: #222; }
+  .rr-route { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rr-bottom { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 12px; color: #666; }
   .rr-price { font-weight: 600; color: #f5222d; }
   .rr-seats { color: #999; }
-  .rr-source {
-    display: inline-block; padding: 1px 5px; border-radius: 3px;
-    font-size: 10px; font-weight: 600; line-height: 1.4;
-  }
-  .rr-source.src-yuecx { background: #e6f7ff; color: #1890ff; }
-  .rr-source.src-busboss { background: #fff7e6; color: #fa8c16; }
   .rr-warn { color: #faad14; font-size: 11px; }
   .rr-right { display: flex; align-items: center; padding: 0 10px; flex-shrink: 0; }
   .rr-book-btn {
@@ -141,7 +133,7 @@
   .rr-footer { font-size: 12px; color: #999; padding: 2px 0; }
 
   /* Booking Card */
-  .bk-card { margin-top: 10px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fafffe; word-break: normal; white-space: normal; }
+  .bk-card { margin-top: 10px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fafffe; }
   .bk-header { background: var(--green); color: #fff; padding: 10px 14px; font-size: 14px; font-weight: 600; }
   .bk-body { padding: 10px 14px; font-size: 13px; line-height: 1.8; color: #333; }
   .bk-row { display: flex; gap: 6px; }
@@ -156,15 +148,100 @@
   .bk-copy.copied { background: #999; }
   .bk-guide { padding: 10px 14px; background: #f8f8f8; font-size: 12px; color: #666; line-height: 1.7; }
   .bk-guide b { color: #333; }
+
+  /* Tab Navigation */
+  #nav-tabs {
+    flex-shrink: 0; display: flex; border-bottom: 1px solid var(--border);
+    background: #fafafa;
+  }
+  .nav-tab {
+    flex: 1; padding: 12px; text-align: center; font-size: 14px;
+    color: #666; cursor: pointer; position: relative;
+  }
+  .nav-tab.active { color: var(--green); font-weight: 600; }
+  .nav-tab.active::after {
+    content: ''; position: absolute; bottom: 0; left: 20%; right: 20%;
+    height: 2px; background: var(--green); border-radius: 1px;
+  }
+
+  /* Orders Panel */
+  .orders-header {
+    padding: 12px 16px; background: #fff; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .orders-title { font-size: 16px; font-weight: 600; color: #333; }
+  .orders-stats { font-size: 12px; color: #999; }
+  .order-filters {
+    display: flex; gap: 8px; padding: 10px 16px; background: #fff;
+    border-bottom: 1px solid var(--border); overflow-x: auto;
+  }
+  .filter-btn {
+    padding: 6px 14px; border: 1px solid #ddd; border-radius: 16px;
+    font-size: 13px; color: #666; background: #fff; cursor: pointer; white-space: nowrap;
+  }
+  .filter-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
+  .order-list { padding: 10px; }
+  .order-item {
+    background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 10px;
+    border: 1px solid var(--border);
+  }
+  .order-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0;
+  }
+  .order-id { font-size: 12px; color: #999; }
+  .order-status {
+    padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
+  }
+  .order-status.pending { background: #fff7e6; color: #fa8c16; }
+  .order-status.paid { background: #e6f7ff; color: #1890ff; }
+  .order-status.completed { background: #f6ffed; color: #52c41a; }
+  .order-status.cancelled { background: #f5f5f5; color: #999; }
+  .order-route {
+    font-size: 15px; font-weight: 600; color: #333; margin-bottom: 8px;
+  }
+  .order-detail { font-size: 13px; color: #666; line-height: 1.6; }
+  .order-detail-row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .order-label { color: #999; min-width: 48px; }
+  .order-value { color: #333; }
+  .order-price { color: #f5222d; font-weight: 600; }
+  .order-actions {
+    display: flex; gap: 8px; margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+  }
+  .order-btn {
+    flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 13px; text-align: center; cursor: pointer; background: #fff;
+  }
+  .order-btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
+  .order-btn.danger { color: #ff4d4f; border-color: #ff4d4f; }
+  .order-btn.stripe { background: #635bff; color: #fff; border-color: #635bff; }
+  .order-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .empty-orders {
+    text-align: center; padding: 60px 20px; color: #999;
+  }
+  .empty-orders-icon { font-size: 48px; margin-bottom: 12px; }
+  .loading-orders {
+    text-align: center; padding: 40px; color: #999;
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <header>粤程助手 · 聚合比价</header>
-  <div id="messages">
-    <div class="hint">广东省城际巴士聚合平台 · 多源比价 · 实时数据</div>
+
+  <!-- Tab Navigation -->
+  <div id="nav-tabs">
+    <div class="nav-tab active" data-tab="chat">💬 智能助手</div>
+    <div class="nav-tab" data-tab="orders">🎫 我的订单</div>
   </div>
-  <div id="input-bar">
+
+  <!-- Chat Panel -->
+  <div id="chat-panel" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+    <div id="messages">
+      <div class="hint">广东省城际巴士聚合平台 · 多源比价 · 实时数据</div>
+    </div>
+    <div id="input-bar">
     <button class="ib-toggle" id="mode-toggle" title="切换语音/文字">
       <svg id="icon-mic" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.93V20H8v2h8v-2h-3v-2.07A7 7 0 0019 11h-2z"/></svg>
       <svg id="icon-kbd" style="display:none" viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 12H4V7h16v10zM6 10h2v2H6v-2zm0 4h8v2H6v-2zm10 0h2v2h-2v-2zm0-4h2v2h-2v-2zm-4 0h2v2h-2v-2z"/></svg>
@@ -172,6 +249,25 @@
     <textarea id="input" rows="1" placeholder="输入你的问题..." enterkeyhint="send"></textarea>
     <button id="voice-btn">按住 说话</button>
     <button id="send-btn">发送</button>
+  </div>
+  </div>
+
+  <!-- Orders Panel -->
+  <div id="orders-panel" style="display: none; flex: 1; overflow-y: auto; background: #f5f5f5;">
+    <div class="orders-header">
+      <div class="orders-title">我的订单</div>
+      <div class="orders-stats" id="orders-stats"></div>
+    </div>
+    <div class="order-filters">
+      <button class="filter-btn active" data-status="">全部</button>
+      <button class="filter-btn" data-status="pending">待支付</button>
+      <button class="filter-btn" data-status="paid">已支付</button>
+      <button class="filter-btn" data-status="completed">已完成</button>
+      <button class="filter-btn" data-status="cancelled">已取消</button>
+    </div>
+    <div class="order-list" id="order-list">
+      <div class="loading-orders">点击「我的订单」标签加载</div>
+    </div>
   </div>
 </div>
 
@@ -363,21 +459,16 @@
     return frag;
   }
 
-  var SOURCE_LABELS = { yuecx: '粤出行', busboss: '如约城际' };
-
   function buildRouteResults(data) {
     var items = data.items || data;
     if (!Array.isArray(items)) return document.createTextNode('');
     var wrap = document.createElement('div'); wrap.className = 'rr-wrap';
     items.forEach(function(it, idx) {
-      var srcClass = it.source ? 'src-' + it.source : 'src-yuecx';
-      var srcLabel = SOURCE_LABELS[it.source] || it.source || '粤出行';
       var el = document.createElement('div'); el.className = 'rr-item' + (it.warn ? ' has-warn' : '');
       el.innerHTML =
         '<div class="rr-rank">' + (idx+1) + '</div>' +
         '<div class="rr-body">' +
-          '<div class="rr-top"><span class="rr-time">' + esc(it.time||'') + '</span><span class="rr-source ' + srcClass + '">' + esc(srcLabel) + '</span></div>' +
-          '<div class="rr-route">' + esc(shortenStation(it.boarding)) + ' <span class="arr">→</span> ' + esc(shortenStation(it.dropoff)) + '</div>' +
+          '<div class="rr-top"><span class="rr-time">' + esc(it.time||'') + '</span><span class="rr-route">' + esc(shortenStation(it.boarding)) + ' → ' + esc(shortenStation(it.dropoff)) + '</span></div>' +
           '<div class="rr-bottom"><span class="rr-price">¥' + esc(it.price||'') + '</span><span class="rr-seats">余' + (it.seats!=null?it.seats:'?') + '座</span>' +
           (it.warn ? '<span class="rr-warn">⚠ ' + esc(it.warn) + '</span>' : '') + '</div>' +
         '</div>' +
@@ -393,21 +484,19 @@
 
   function buildBookingCard(info) {
     var card = document.createElement('div'); card.className = 'bk-card';
-    var miniapp = info.miniappName || SOURCE_LABELS[info.source] || '粤出行城际巴士';
     var bodyHtml = '';
     [['路线',info.route],['日期',info.date],['上车',(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||'')],
-     ['下车',info.dropoffStation],['票价',info.priceYuan?'¥'+info.priceYuan:''],['余票',info.residue!=null?info.residue+'张':''],
-     ['来源', miniapp]
+     ['下车',info.dropoffStation],['票价',info.priceYuan?'¥'+info.priceYuan:''],['余票',info.residue!=null?info.residue+'张':'']
     ].forEach(function(r){ if(r[1]) bodyHtml += '<div class="bk-row"><span class="bk-label">'+esc(r[0])+'</span><span class="bk-val">'+esc(r[1])+'</span></div>'; });
 
     card.innerHTML =
       '<div class="bk-header">🎫 订票信息</div>' +
       '<div class="bk-body">' + bodyHtml + '</div>' +
       '<div class="bk-actions"><button class="bk-copy">📋 复制订票信息</button></div>' +
-      '<div class="bk-guide">📱 微信搜「<b>' + esc(miniapp) + '</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找 <b>' + esc(info.fromTime||'') + '</b> 班次下单</div>';
+      '<div class="bk-guide">📱 微信搜「<b>粤出行城际巴士</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找 <b>' + esc(info.fromTime||'') + '</b> 班次下单</div>';
 
     var copyBtn = card.querySelector('.bk-copy');
-    var copyText = [info.route,info.date,(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''),'下车: '+(info.dropoffStation||''),'票价: ¥'+(info.priceYuan||''),'微信搜: '+miniapp].join('\n');
+    var copyText = [info.route,info.date,(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''),'下车: '+(info.dropoffStation||''),'票价: ¥'+(info.priceYuan||'')].join('\n');
     copyBtn.addEventListener('click', function() {
       navigator.clipboard.writeText(copyText).then(function() {
         copyBtn.textContent = '✅ 已复制'; copyBtn.classList.add('copied');
@@ -474,8 +563,221 @@
   inputEl.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
   inputEl.addEventListener('input', autoGrow);
 
-  addMessage('你好！我是粤程助手 🚌\n\n我同时从多个平台（粤出行、如约城际等）查询班次，帮你比价找到最优选择。\n\n告诉我从哪到哪、哪天走，例如："明天从深圳南山去广州天河"', 'bot');
+  addMessage('你好！我是粤程助手 🚌\n\n告诉我从哪到哪、哪天走，帮你找最合适的班次。\n\n例如："明天从深圳南山去广州天河"', 'bot');
   fetch('/api/health').catch(function(){});
+
+  // ── Tab 切换功能 ─────────────────────────────────────────
+  var STATUS_TEXT = {
+    pending: '待支付',
+    paid: '已支付',
+    confirmed: '已确认',
+    completed: '已完成',
+    cancelled: '已取消',
+    refunded: '已退款',
+  };
+
+  document.querySelectorAll('.nav-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var targetTab = this.dataset.tab;
+
+      // 切换 Tab 样式
+      document.querySelectorAll('.nav-tab').forEach(function(t) { t.classList.remove('active'); });
+      this.classList.add('active');
+
+      // 切换面板显示
+      var chatPanel = document.getElementById('chat-panel');
+      var ordersPanel = document.getElementById('orders-panel');
+
+      if (targetTab === 'chat') {
+        chatPanel.style.display = 'flex';
+        ordersPanel.style.display = 'none';
+      } else {
+        chatPanel.style.display = 'none';
+        ordersPanel.style.display = 'block';
+        loadOrders();
+      }
+    });
+  });
+
+  // ── 订单过滤功能 ─────────────────────────────────────────
+  document.querySelectorAll('.filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      loadOrders(this.dataset.status);
+    });
+  });
+
+  // ── 加载订单列表 ─────────────────────────────────────────
+  async function loadOrders(status) {
+    var orderList = document.getElementById('order-list');
+    var ordersStats = document.getElementById('orders-stats');
+    orderList.innerHTML = '<div class="loading-orders">加载中...</div>';
+
+    try {
+      var url = '/api/orders';
+      if (status) url += '?status=' + encodeURIComponent(status);
+
+      var resp = await fetch(url);
+      var result = await resp.json();
+
+      if (!result.success) {
+        orderList.innerHTML = '<div class="empty-orders"><div class="empty-orders-icon">⚠️</div>加载失败</div>';
+        return;
+      }
+
+      var orders = result.data.orders || [];
+      ordersStats.textContent = '共 ' + result.data.total + ' 单';
+
+      if (orders.length === 0) {
+        orderList.innerHTML = '<div class="empty-orders"><div class="empty-orders-icon">🎫</div>暂无订单</div>';
+        return;
+      }
+
+      var html = '';
+      orders.forEach(function(o) {
+        var miniappName = o.miniapp ? o.miniapp.name : (o.source === 'yuecx' ? '粤出行' : '如约城际');
+
+        html += '<div class="order-item">' +
+          '<div class="order-header">' +
+            '<span class="order-id">' + esc(o.orderId) + '</span>' +
+            '<span class="order-status ' + esc(o.status) + '">' + esc(STATUS_TEXT[o.status] || o.statusText) + '</span>' +
+          '</div>' +
+          '<div class="order-route">' + esc(o.route) + '</div>' +
+          '<div class="order-detail">' +
+            '<div class="order-detail-row"><span class="order-label">日期</span><span class="order-value">' + esc(o.date) + ' ' + esc(o.fromTime || '') + '</span></div>' +
+            '<div class="order-detail-row"><span class="order-label">上下车</span><span class="order-value">' + esc(o.boardingStation || '未指定') + ' → ' + esc(o.dropoffStation || '未指定') + '</span></div>' +
+            '<div class="order-detail-row"><span class="order-label">票价</span><span class="order-price">¥' + esc(o.priceYuan) + '</span></div>' +
+            '<div class="order-detail-row"><span class="order-label">来源</span><span class="order-value">' + esc(miniappName) + '</span></div>' +
+          '</div>' +
+          '<div class="order-actions">' +
+            (o.status === 'pending' ? '<button class="order-btn primary" data-action="pay" data-id="' + o.orderId + '">去支付</button>' : '') +
+            (o.status === 'pending' ? '<button class="order-btn danger" data-action="cancel" data-id="' + o.orderId + '">取消</button>' : '') +
+            (o.status === 'paid' || o.status === 'confirmed' ? '<button class="order-btn" data-action="ticket" data-id="' + o.orderId + '">查看车票</button>' : '') +
+            '<button class="order-btn" data-action="detail" data-id="' + o.orderId + '">详情</button>' +
+          '</div>' +
+        '</div>';
+      });
+
+      orderList.innerHTML = html;
+
+      // 绑定按钮事件
+      orderList.querySelectorAll('.order-btn').forEach(function(btn) {
+        btn.addEventListener('click', handleOrderAction);
+      });
+    } catch (err) {
+      console.error('Load orders error:', err);
+      orderList.innerHTML = '<div class="empty-orders"><div class="empty-orders-icon">⚠️</div>加载失败: ' + esc(err.message) + '</div>';
+    }
+  }
+
+  // ── 订单操作处理 ─────────────────────────────────────────
+  async function handleOrderAction(e) {
+    var action = e.target.dataset.action;
+    var orderId = e.target.dataset.id;
+
+    if (action === 'cancel') {
+      if (!confirm('确定要取消订单 ' + orderId + ' 吗？')) return;
+
+      try {
+        var resp = await fetch('/api/orders/' + orderId + '/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: '用户取消' }),
+        });
+        var result = await resp.json();
+
+        if (result.success) {
+          alert('订单已取消');
+          loadOrders();
+        } else {
+          alert('取消失败: ' + (result.error || '未知错误'));
+        }
+      } catch (err) {
+        alert('取消失败: ' + err.message);
+      }
+    } else if (action === 'pay') {
+      var payMethod = confirm('💳 点击"确定"使用 Stripe 支付 (支持支付宝/微信/信用卡)\n\n点击"取消"查看小程序支付指引');
+
+      if (payMethod) {
+        try {
+          e.target.textContent = '⏳ 跳转中...';
+          e.target.disabled = true;
+
+          var resp = await fetch('/api/orders/' + orderId + '/pay', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          var result = await resp.json();
+
+          if (result.success && result.url) {
+            window.location.href = result.url;
+          } else {
+            alert('支付创建失败: ' + (result.error || '未知错误'));
+            e.target.textContent = '去支付';
+            e.target.disabled = false;
+          }
+        } catch (err) {
+          alert('支付创建失败: ' + err.message);
+          e.target.textContent = '去支付';
+          e.target.disabled = false;
+        }
+      } else {
+        alert('🎫 小程序支付指引:\n\n1. 微信搜索「粤出行城际巴士」或「如约城际巴士」\n2. 进入订单页面\n3. 找到订单完成支付');
+      }
+    } else if (action === 'detail' || action === 'ticket') {
+      try {
+        var resp = await fetch('/api/orders/' + orderId);
+        var result = await resp.json();
+
+        if (result.success) {
+          var detail = result.data;
+          var info = [
+            '订单号: ' + detail.orderId,
+            '状态: ' + (STATUS_TEXT[detail.status] || detail.statusText),
+            '路线: ' + (detail.startCity + ' → ' + detail.endCity),
+            '日期: ' + detail.date,
+            '时间: ' + (detail.fromTime || '未指定'),
+            '上车站: ' + (detail.boardingStation || '未指定'),
+            '下车站: ' + (detail.dropoffStation || '未指定'),
+            '票价: ¥' + detail.priceYuan,
+            '来源: ' + (detail.source === 'yuecx' ? '粤出行' : '如约城际'),
+            '创建时间: ' + new Date(detail.createdAt).toLocaleString(),
+          ].join('\n');
+
+          if (detail.miniapp && detail.miniapp.path) {
+            info += '\n\n小程序路径: ' + detail.miniapp.path;
+          }
+
+          alert(info);
+        }
+      } catch (err) {
+        alert('获取详情失败: ' + err.message);
+      }
+    }
+  }
+
+  // ── 处理支付回调 ─────────────────────────────────────────
+  (function handlePaymentCallback() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var payment = urlParams.get('payment');
+    var orderId = urlParams.get('orderId');
+
+    if (payment === 'success') {
+      addMessage('✅ 支付成功！订单号: ' + (orderId || '') + '\n\n感谢您的购买，订单已确认。', 'bot');
+      window.history.replaceState({}, '', '/');
+    } else if (payment === 'cancelled') {
+      addMessage('⚠️ 支付已取消。订单 ' + (orderId || '') + ' 仍保留，您可以稍后重新支付。', 'bot');
+      window.history.replaceState({}, '', '/');
+    } else if (payment === 'error') {
+      var message = urlParams.get('message') || '未知错误';
+      addMessage('❌ 支付处理失败: ' + decodeURIComponent(message) + '\n\n请稍后重试或联系客服。', 'bot');
+      window.history.replaceState({}, '', '/');
+    } else if (payment === 'pending') {
+      addMessage('⏳ 支付处理中，订单号: ' + (orderId || '') + '\n\n请稍等片刻，系统正在确认支付状态。', 'bot');
+      window.history.replaceState({}, '', '/');
+    }
+  })();
 })();
 </script>
 </body>

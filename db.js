@@ -201,6 +201,103 @@ async function migrate() {
   console.log("Migration complete.");
 }
 
+// ── Orders ──────────────────────────────────────────────────
+
+async function saveOrder(order) {
+  try {
+    await pool.query(
+      `INSERT INTO orders (
+        order_id, source, status, interval_id, date,
+        start_city, end_city, boarding_station, dropoff_station,
+        from_time, price_yuan, passenger_info, user_id,
+        miniapp_name, miniapp_app_id, miniapp_path,
+        created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $17)
+      ON CONFLICT (order_id) DO UPDATE SET
+        status = EXCLUDED.status,
+        updated_at = EXCLUDED.updated_at`,
+      [
+        order.orderId, order.source, order.status, order.intervalId, order.date,
+        order.startCity, order.endCity, order.boardingStation, order.dropoffStation,
+        order.fromTime, order.priceYuan, JSON.stringify(order.passengerInfo), order.userId,
+        order.miniapp?.name, order.miniapp?.appId, order.miniapp?.path,
+        order.createdAt,
+      ]
+    );
+    return true;
+  } catch (err) {
+    console.error("[db] saveOrder error:", err.message);
+    return false;
+  }
+}
+
+async function getOrderById(orderId) {
+  const { rows } = await pool.query(
+    `SELECT * FROM orders WHERE order_id = $1`,
+    [orderId]
+  );
+  return rows[0] || null;
+}
+
+async function listOrders({ userId, status, page = 1, limit = 20 }) {
+  let where = [];
+  let params = [];
+  let idx = 1;
+  
+  if (userId && userId !== "anonymous") {
+    where.push(`user_id = $${idx}`);
+    params.push(userId);
+    idx++;
+  }
+  
+  if (status) {
+    where.push(`status = $${idx}`);
+    params.push(status);
+    idx++;
+  }
+  
+  const whereClause = where.length > 0 ? 'WHERE ' + where.join(' AND ') : '';
+  const offset = (page - 1) * limit;
+  
+  params.push(limit);
+  params.push(offset);
+  
+  const { rows } = await pool.query(
+    `SELECT * FROM orders ${whereClause} ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx+1}`,
+    params
+  );
+  
+  return rows.map(row => ({
+    orderId: row.order_id,
+    source: row.source,
+    status: row.status,
+    date: row.date,
+    startCity: row.start_city,
+    endCity: row.end_city,
+    boardingStation: row.boarding_station,
+    dropoffStation: row.dropoff_station,
+    fromTime: row.from_time,
+    priceYuan: row.price_yuan,
+    passengerInfo: row.passenger_info,
+    userId: row.user_id,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+async function updateOrderStatus(orderId, status, extra = {}) {
+  try {
+    await pool.query(
+      `UPDATE orders SET status = $2, updated_at = NOW() WHERE order_id = $1`,
+      [orderId, status]
+    );
+    return true;
+  } catch (err) {
+    console.error("[db] updateOrderStatus error:", err.message);
+    return false;
+  }
+}
+
 async function close() {
   await pool.end();
 }
@@ -210,6 +307,7 @@ module.exports = {
   upsertCity, findCityByName, getAllCities,
   upsertRoute, getRouteId, getHotRoutes, getAllRoutes, getDestinations, updateRouteLastCrawl,
   upsertIntervals, queryIntervals, getCacheAge, cleanExpired,
+  saveOrder, getOrderById, listOrders, updateOrderStatus,
   migrate, close,
 };
 

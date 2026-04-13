@@ -1,25 +1,36 @@
 services:
   - type: web
-    name: yuecheng-assistant
+    name: yuecx-assistant
     runtime: node
-    plan: free
-    rootDir: yuecx
+    plan: starter
     buildCommand: npm ci
-    startCommand: node server.js
+    startCommand: npm start
     envVars:
       - key: DATABASE_URL
-        sync: false
-      - key: LLM_API_KEY
-        sync: false
+        fromDatabase:
+          name: yuecx-db
+          property: connectionString
+      - key: STRIPE_SECRET_KEY
+        sync: false  # 在 Dashboard 中设置生产密钥
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false  # 在 Dashboard 中设置
+      - key: HOST_URL
+        value: https://yuecx-assistant.onrender.com  # 部署后更新为实际域名
       - key: LLM_BASE_URL
         value: https://dashscope.aliyuncs.com/compatible-mode/v1
+      - key: LLM_API_KEY
+        sync: false  # 在 Dashboard 中设置
       - key: LLM_MODEL
         value: qwen-max
-      - key: YUECX_HOST
-        value: https://15676888-api.ylxweb.com
-      - key: YUECX_CORP_ID
-        value: ycx
-      - key: YUECX_APPID
-        value: wx44d254291f27af7c
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000  # Render 默认端口
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+databases:
+  - name: yuecx-db
+    databaseName: yuecx
+    plan: starter
+    postgresMajorVersion: 15

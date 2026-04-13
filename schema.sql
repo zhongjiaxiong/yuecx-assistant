@@ -46,3 +46,44 @@ CREATE TABLE IF NOT EXISTS chat_logs (
   content    TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 订单表
+CREATE TABLE IF NOT EXISTS orders (
+  id                SERIAL PRIMARY KEY,
+  order_id          VARCHAR UNIQUE NOT NULL,
+  source            VARCHAR NOT NULL, -- yuecx / busboss
+  status            VARCHAR NOT NULL DEFAULT 'pending', -- pending/paid/confirmed/completed/cancelled/refunded
+  
+  -- 班次信息
+  interval_id       VARCHAR,
+  date              DATE NOT NULL,
+  start_city        VARCHAR NOT NULL,
+  end_city          VARCHAR NOT NULL,
+  boarding_station  VARCHAR,
+  dropoff_station   VARCHAR,
+  from_time         VARCHAR,
+  price_yuan        VARCHAR,
+  
+  -- 乘客信息
+  passenger_info    JSONB DEFAULT '{}',
+  
+  -- 用户信息
+  user_id           VARCHAR DEFAULT 'anonymous',
+  
+  -- 小程序信息
+  miniapp_name      VARCHAR,
+  miniapp_app_id    VARCHAR,
+  miniapp_path      VARCHAR,
+  
+  -- 支付信息
+  payment_info      JSONB DEFAULT '{}',
+  
+  -- 元数据
+  raw_data          JSONB DEFAULT '{}',
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC);

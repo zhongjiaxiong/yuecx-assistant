@@ -1,0 +1,1 @@
+{"name":"ticket2","version":"1.0.0","description":"ticket2_npm_pkg","main":"app.js","scripts":{"test":"dev"},"author":"hym","license":"ISC","dependencies":{"crypto-js":"^4.2.0","umtrack-wx":"^2.5.2"}}
