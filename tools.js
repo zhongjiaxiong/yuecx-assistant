@@ -6,7 +6,8 @@
 const db = require("./db");
 const { scoreAndRank } = require("./scorer");
 const { requestGETv1, crawlOnDemand } = require("./crawler");
-const busboss = require("./busboss_crawler");
+let busboss;
+try { busboss = require("./busboss_crawler"); } catch { busboss = { isAvailable: () => false, queryByNames: async () => [] }; }
 
 const CACHE_MAX_MINUTES = parseInt(process.env.CACHE_MAX_MINUTES || "5", 10);
 const CACHE_MAX_MS = CACHE_MAX_MINUTES * 60 * 1000;
