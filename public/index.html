@@ -323,17 +323,35 @@
 
   function renderBotContent(text) {
     var frag = document.createDocumentFragment();
-    var re = /\[(ROUTE_RESULTS|BOOKING_CARD):([\s\S]*?)\]/g;
-    var last = 0, m;
-    while ((m = re.exec(text)) !== null) {
-      if (m.index > last) { var sp = document.createElement('span'); sp.textContent = text.slice(last, m.index); frag.appendChild(sp); }
-      try {
-        var d = JSON.parse(m[2].trim());
-        frag.appendChild(m[1] === 'ROUTE_RESULTS' ? buildRouteResults(d) : buildBookingCard(d));
-      } catch(e) { var s2 = document.createElement('span'); s2.textContent = m[0]; frag.appendChild(s2); }
-      last = re.lastIndex;
+    var tags = ['ROUTE_RESULTS', 'BOOKING_CARD'];
+    var pos = 0;
+    while (pos < text.length) {
+      var best = null;
+      for (var i = 0; i < tags.length; i++) {
+        var pfx = '[' + tags[i] + ':';
+        var idx = text.indexOf(pfx, pos);
+        if (idx !== -1 && (!best || idx < best.idx)) best = { tag: tags[i], idx: idx, pfx: pfx };
+      }
+      if (!best) { var sp = document.createElement('span'); sp.textContent = text.slice(pos); frag.appendChild(sp); break; }
+      if (best.idx > pos) { var sp2 = document.createElement('span'); sp2.textContent = text.slice(pos, best.idx); frag.appendChild(sp2); }
+      var jStart = best.idx + best.pfx.length;
+      var depth = 0, jEnd = -1;
+      for (var j = jStart; j < text.length; j++) {
+        if (text[j] === '{') depth++;
+        else if (text[j] === '}') { depth--; if (depth === 0) { jEnd = j + 1; break; } }
+      }
+      if (jEnd > 0) {
+        try {
+          var d = JSON.parse(text.slice(jStart, jEnd));
+          frag.appendChild(best.tag === 'ROUTE_RESULTS' ? buildRouteResults(d) : buildBookingCard(d));
+          pos = jEnd; if (pos < text.length && text[pos] === ']') pos++;
+        } catch(e) {
+          var sf = document.createElement('span'); sf.textContent = text.slice(best.idx, jEnd); frag.appendChild(sf); pos = jEnd;
+        }
+      } else {
+        var sr = document.createElement('span'); sr.textContent = text.slice(best.idx); frag.appendChild(sr); break;
+      }
     }
-    if (last < text.length) { var tail = document.createElement('span'); tail.textContent = text.slice(last); frag.appendChild(tail); }
     return frag;
   }
 
