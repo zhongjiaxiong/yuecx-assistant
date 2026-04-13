@@ -39,6 +39,7 @@ async function fetchNewChallenge(count = 1) {
       v: VERSION,
     },
     body: `countString=${count}`,
+    signal: AbortSignal.timeout(10000),
   });
   const data = await resp.json();
   if (!data.success || !data.data) throw new Error("PoW challenge failed");
@@ -82,6 +83,7 @@ async function requestGETv1(apiPath, params = {}) {
   const resp = await fetch(url, {
     method: "GET",
     headers: { "content-type": "application/json", ...challengeHeaders, corpid: CORP_ID },
+    signal: AbortSignal.timeout(15000),
   });
   return resp.json();
 }
@@ -126,7 +128,35 @@ async function syncMeta() {
 
 // ── 按需实时查询单路线单日 ───────────────────────────────────
 
-async function fetchRouteDay(routeId, startCityId, endCityId, tripDate) {
+function parseRawInterval(raw, routeId, tripDate, crawlTime) {
+  return {
+    interval_id: raw.id,
+    route_id: routeId,
+    take_date: tripDate,
+    from_time: raw.fromTime || "",
+    interval_name: raw.intervalName || "",
+    price_fen: raw.bottomPriceFen || 0,
+    residue: raw.residue ?? 0,
+    status: raw.status ?? 0,
+    line_id: raw.lineId || "",
+    boarding_stations: (raw.addressList || []).map((s) => ({
+      name: s.name, arriveTime: s.arriveTime || "", adcode: s.adcode || "",
+      code: s.code || "", id: s.id || "",
+    })),
+    dropoff_stations: (raw.getOffAddressList || []).map((s) => ({
+      name: s.name, arriveTime: s.arriveTime || "", adcode: s.adcode || "",
+      code: s.code || "", id: s.id || "",
+    })),
+    raw_data: raw,
+    crawl_time: crawlTime,
+  };
+}
+
+/**
+ * 直接从 API 抓取并返回格式化数据。
+ * 不做任何 DB 操作，由调用方负责后台写入。
+ */
+async function fetchRouteDayDirect(routeId, startCityId, endCityId, tripDate) {
   let start = 0;
   const all = [];
   const crawlTime = new Date().toISOString();
@@ -136,51 +166,44 @@ async function fetchRouteDay(routeId, startCityId, endCityId, tripDate) {
       tripDate, startCityId, endCityId, start, limit: PAGE_SIZE,
       startAreaId: "", endAreaId: "",
     });
-    if (!result.success || !result.data) break;
+    if (!result.success || !result.data) {
+      console.warn("[crawl] API fail:", result.success, result.message || "no data");
+      break;
+    }
     const list = result.data.intervalList || [];
     if (list.length === 0) break;
-
-    for (const raw of list) {
-      all.push({
-        interval_id: raw.id,
-        route_id: routeId,
-        take_date: tripDate,
-        from_time: raw.fromTime || "",
-        interval_name: raw.intervalName || "",
-        price_fen: raw.bottomPriceFen || 0,
-        residue: raw.residue ?? 0,
-        status: raw.status ?? 0,
-        line_id: raw.lineId || "",
-        boarding_stations: (raw.addressList || []).map((s) => ({
-          name: s.name, arriveTime: s.arriveTime || "", adcode: s.adcode || "",
-          code: s.code || "", id: s.id || "",
-        })),
-        dropoff_stations: (raw.getOffAddressList || []).map((s) => ({
-          name: s.name, arriveTime: s.arriveTime || "", adcode: s.adcode || "",
-          code: s.code || "", id: s.id || "",
-        })),
-        raw_data: raw,
-        crawl_time: crawlTime,
-      });
-    }
-
+    for (const raw of list) all.push(parseRawInterval(raw, routeId, tripDate, crawlTime));
+    console.log(`[crawl] page ${Math.floor(start/PAGE_SIZE)+1}: ${list.length} intervals`);
     if (list.length < PAGE_SIZE) break;
     start += PAGE_SIZE;
-    await sleep(300);
   }
 
-  if (all.length > 0) {
-    await db.upsertIntervals(all);
+  return all;
+}
+
+const routeIdCache = new Map();
+
+async function resolveRouteId(startCityId, endCityId) {
+  const rKey = `${startCityId}:${endCityId}`;
+  let routeId = routeIdCache.get(rKey);
+  if (!routeId) {
+    routeId = await db.getRouteId(startCityId, endCityId);
+    if (routeId) routeIdCache.set(rKey, routeId);
   }
-  return all.length;
+  return routeId;
 }
 
 async function crawlOnDemand(startCityId, endCityId, date) {
-  const routeId = await db.getRouteId(startCityId, endCityId);
-  if (!routeId) return 0;
-  const count = await fetchRouteDay(routeId, startCityId, endCityId, date);
-  await db.updateRouteLastCrawl(routeId);
-  return count;
+  const routeIdPromise = resolveRouteId(startCityId, endCityId);
+  const intervals = await fetchRouteDayDirect(null, startCityId, endCityId, date);
+  routeIdPromise.then((routeId) => {
+    if (routeId) {
+      for (const iv of intervals) iv.route_id = routeId;
+      db.upsertIntervals(intervals).catch((e) => console.error("[crawl] bg upsert:", e.message));
+      db.updateRouteLastCrawl(routeId).catch(() => {});
+    }
+  }).catch(() => {});
+  return intervals;
 }
 
 module.exports = { requestGETv1, getChallengeHeaders, crawlOnDemand, syncMeta };

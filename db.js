@@ -118,32 +118,41 @@ async function updateRouteLastCrawl(routeId) {
 
 async function upsertIntervals(intervals) {
   if (!intervals.length) return;
+  const BATCH = 20;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    for (const iv of intervals) {
-      await client.query(
-        `INSERT INTO intervals
-           (interval_id, route_id, take_date, from_time, interval_name,
-            price_fen, residue, status, line_id,
-            boarding_stations, dropoff_stations, raw_data, crawl_time, source)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
-         ON CONFLICT (interval_id, take_date) DO UPDATE SET
-           residue = EXCLUDED.residue,
-           status = EXCLUDED.status,
-           price_fen = EXCLUDED.price_fen,
-           boarding_stations = EXCLUDED.boarding_stations,
-           dropoff_stations = EXCLUDED.dropoff_stations,
-           raw_data = EXCLUDED.raw_data,
-           crawl_time = EXCLUDED.crawl_time`,
-        [
+    for (let i = 0; i < intervals.length; i += BATCH) {
+      const chunk = intervals.slice(i, i + BATCH);
+      const values = [];
+      const placeholders = [];
+      let idx = 1;
+      for (const iv of chunk) {
+        placeholders.push(`($${idx},$${idx+1},$${idx+2},$${idx+3},$${idx+4},$${idx+5},$${idx+6},$${idx+7},$${idx+8},$${idx+9},$${idx+10},$${idx+11},$${idx+12},$${idx+13})`);
+        values.push(
           iv.interval_id, iv.route_id, iv.take_date, iv.from_time,
           iv.interval_name, iv.price_fen, iv.residue, iv.status, iv.line_id,
           JSON.stringify(iv.boarding_stations),
           JSON.stringify(iv.dropoff_stations),
           JSON.stringify(iv.raw_data),
           iv.crawl_time, iv.source || "yuecx",
-        ]
+        );
+        idx += 14;
+      }
+      await client.query(
+        `INSERT INTO intervals
+           (interval_id, route_id, take_date, from_time, interval_name,
+            price_fen, residue, status, line_id,
+            boarding_stations, dropoff_stations, raw_data, crawl_time, source)
+         VALUES ${placeholders.join(",")}
+         ON CONFLICT (interval_id, take_date) DO UPDATE SET
+           residue = EXCLUDED.residue, status = EXCLUDED.status,
+           price_fen = EXCLUDED.price_fen,
+           boarding_stations = EXCLUDED.boarding_stations,
+           dropoff_stations = EXCLUDED.dropoff_stations,
+           raw_data = EXCLUDED.raw_data,
+           crawl_time = EXCLUDED.crawl_time`,
+        values
       );
     }
     await client.query("COMMIT");
