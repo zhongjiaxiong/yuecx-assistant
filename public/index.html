@@ -70,13 +70,31 @@
   #send-btn:disabled { opacity: .4; cursor: default; }
   #send-btn:active:not(:disabled) { opacity: .7; }
   .hint { text-align: center; color: #999; font-size: 12px; padding: 8px 0 4px; }
-  .booking-btn {
-    display: inline-block; margin-top: 8px; padding: 10px 20px;
-    background: #07c160; color: #fff; border-radius: 8px;
-    text-decoration: none; font-size: 15px; font-weight: 600;
-    text-align: center; transition: opacity .15s;
+  .booking-card {
+    margin-top: 10px; border: 1px solid #e5e5e5; border-radius: 12px;
+    overflow: hidden; background: #fafffe;
   }
-  .booking-btn:active { opacity: .7; }
+  .booking-card-header {
+    background: #07c160; color: #fff; padding: 10px 14px;
+    font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px;
+  }
+  .booking-card-body { padding: 12px 14px; font-size: 14px; line-height: 1.8; color: #333; }
+  .booking-card-row { display: flex; gap: 6px; }
+  .booking-card-label { color: #999; flex-shrink: 0; min-width: 56px; }
+  .booking-card-value { color: #333; font-weight: 500; }
+  .booking-card-actions { padding: 10px 14px; display: flex; gap: 8px; border-top: 1px solid #f0f0f0; }
+  .booking-copy-btn {
+    flex: 1; padding: 10px; border: none; border-radius: 8px;
+    background: #07c160; color: #fff; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .booking-copy-btn:active { opacity: .7; }
+  .booking-copy-btn.copied { background: #999; }
+  .booking-guide {
+    margin-top: 8px; padding: 10px 14px; background: #f8f8f8; border-radius: 8px;
+    font-size: 12px; color: #666; line-height: 1.7;
+  }
+  .booking-guide-title { font-weight: 600; color: #333; margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -103,7 +121,7 @@
   }
 
   function renderBotContent(text) {
-    var parts = text.split(/\[BOOKING_URL:(.*?)\]/g);
+    var parts = text.split(/\[BOOKING_CARD:([\s\S]*?)\]/g);
     var frag = document.createDocumentFragment();
     for (var i = 0; i < parts.length; i++) {
       if (i % 2 === 0) {
@@ -113,17 +131,87 @@
           frag.appendChild(span);
         }
       } else {
-        var url = parts[i].trim();
-        var btn = document.createElement('a');
-        btn.href = url;
-        btn.className = 'booking-btn';
-        btn.textContent = '点击跳转订票';
-        btn.setAttribute('target', '_blank');
-        frag.appendChild(document.createElement('br'));
-        frag.appendChild(btn);
+        try {
+          var info = JSON.parse(parts[i].trim());
+          frag.appendChild(buildBookingCard(info));
+        } catch(e) {
+          var span2 = document.createElement('span');
+          span2.textContent = parts[i];
+          frag.appendChild(span2);
+        }
       }
     }
     return frag;
+  }
+
+  function buildBookingCard(info) {
+    var card = document.createElement('div');
+    card.className = 'booking-card';
+
+    var header = document.createElement('div');
+    header.className = 'booking-card-header';
+    header.textContent = '🎫 订票信息';
+    card.appendChild(header);
+
+    var body = document.createElement('div');
+    body.className = 'booking-card-body';
+    var rows = [
+      ['路线', info.route || ''],
+      ['日期', info.date || ''],
+      ['班次', info.fromTime ? (info.fromTime + ' ' + (info.intervalName || '')) : (info.intervalName || '')],
+      ['上车站', info.boardingStation || ''],
+      ['下车站', info.dropoffStation || ''],
+      ['票价', info.priceYuan ? ('¥' + info.priceYuan) : ''],
+      ['余票', info.residue != null ? (info.residue + '张') : ''],
+    ];
+    rows.forEach(function(r) {
+      if (!r[1]) return;
+      var row = document.createElement('div');
+      row.className = 'booking-card-row';
+      var label = document.createElement('span');
+      label.className = 'booking-card-label';
+      label.textContent = r[0];
+      var value = document.createElement('span');
+      value.className = 'booking-card-value';
+      value.textContent = r[1];
+      row.appendChild(label);
+      row.appendChild(value);
+      body.appendChild(row);
+    });
+    card.appendChild(body);
+
+    var actions = document.createElement('div');
+    actions.className = 'booking-card-actions';
+    var copyBtn = document.createElement('button');
+    copyBtn.className = 'booking-copy-btn';
+    copyBtn.textContent = '📋 复制订票信息';
+    var copyText = [
+      info.route || '', info.date || '',
+      (info.fromTime || '') + ' ' + (info.intervalName || ''),
+      '上车: ' + (info.boardingStation || ''),
+      '下车: ' + (info.dropoffStation || ''),
+      '票价: ¥' + (info.priceYuan || ''),
+    ].join('\n');
+    copyBtn.addEventListener('click', function() {
+      navigator.clipboard.writeText(copyText).then(function() {
+        copyBtn.textContent = '✅ 已复制';
+        copyBtn.classList.add('copied');
+        setTimeout(function() { copyBtn.textContent = '📋 复制订票信息'; copyBtn.classList.remove('copied'); }, 2000);
+      });
+    });
+    actions.appendChild(copyBtn);
+    card.appendChild(actions);
+
+    var guide = document.createElement('div');
+    guide.className = 'booking-guide';
+    guide.innerHTML = '<div class="booking-guide-title">📱 如何购票</div>'
+      + '1. 微信搜索「<b>粤出行城际巴士</b>」小程序<br>'
+      + '2. 选择 <b>' + (info.route || '').replace('→', ' → ') + '</b><br>'
+      + '3. 选择日期 <b>' + (info.date || '') + '</b><br>'
+      + '4. 找到 <b>' + (info.fromTime || '') + '</b> 的班次下单';
+    card.appendChild(guide);
+
+    return card;
   }
 
   function addMessage(text, role) {

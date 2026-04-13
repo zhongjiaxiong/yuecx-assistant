@@ -56,10 +56,12 @@ function buildSystemPrompt() {
    - 如果全部 filteredSoldOut，建议看其他日期。
 8. 展示完推荐后，主动提示用户可以说"订第X班"来获取订票链接。
 9. 订票流程:
-   - 用户说"订第一班"、"就这个"、"帮我订"等意图时，调 book_interval 生成订票链接。
-   - 返回时用这个格式: "已为你准备好订票链接，在手机浏览器中点击即可跳转到小程序完成购票：\n\n[BOOKING_URL:链接地址]"
-   - 务必把完整的 weixin:// 链接放在 [BOOKING_URL:...] 标记中，前端会渲染为按钮。
-   - 同时告知用户班次信息（时间、站点、价格）以便确认。
+   - 用户说"订第一班"、"就这个"、"帮我订"等意图时，调 book_interval。
+   - book_interval 返回结构化数据（route, date, fromTime, boardingTime, intervalName, boardingStation, dropoffStation, priceYuan, residue）。
+   - 你需要把这些信息用 [BOOKING_CARD:JSON] 标记输出，前端会渲染为订票卡片（含复制按钮和小程序引导）。
+   - JSON 必须是单行，包含 book_interval 返回的 data 字段内容。示例:
+     [BOOKING_CARD:{"route":"深圳→广州","date":"2026-04-14","fromTime":"08:30","boardingTime":"08:45","intervalName":"深圳-广州主营线","boardingStation":"深大地铁站","dropoffStation":"体育西路","priceYuan":"50.00","residue":8}]
+   - 在卡片前加一句简短确认，如"已为你准备好订票信息："。
 10. 用户确认某班次状态时，调 verify_realtime 获取最新状态再告知。
 11. 简洁友好。不要暴露内部 ID。`;
 }

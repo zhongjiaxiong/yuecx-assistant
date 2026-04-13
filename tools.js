@@ -11,8 +11,7 @@ const { requestGETv1, crawlOnDemand } = require("./crawler");
 
 const CACHE_MAX_MINUTES = parseInt(process.env.CACHE_MAX_MINUTES || "5", 10);
 
-const MINIAPP_APPID = "wx44d254291f27af7c";
-const FILLORDER_PATH = "/package/fillorder/pages/fillorder/fillorder";
+const MINIAPP_NAME = "粤出行城际巴士";
 
 // ── 城市名 -> cityId 解析 ───────────────────────────────────
 
@@ -222,36 +221,19 @@ async function bookInterval({ date, startCity, endCity, intervalId, boardingStat
     (s) => !dropoffStationName || s.name.includes(dropoffStationName)
   ) || (iv.dropoff_stations || [])[0];
 
-  const queryParams = new URLSearchParams({
-    intervalID: String(iv.interval_id),
-    interval_id: String(iv.interval_id),
-    lineID: iv.line_id || "",
-    tripDate: date,
-    station: iv.from_time || "",
-    beginCityCode: start.city_id,
-    beginCityName: start.city_name,
-    endCityCode: end.city_id,
-    endCityName: end.city_name,
-    addressID: boarding?.id || "",
-    addressName: boarding?.name || "",
-    getOffAddressID: dropoff?.id || "",
-    getOffAddressName: dropoff?.name || "",
-  }).toString();
-
-  const schemeUrl = `weixin://dl/business/?appid=${MINIAPP_APPID}&path=${encodeURIComponent(FILLORDER_PATH)}&query=${encodeURIComponent(queryParams)}`;
-
   return {
     success: true,
     data: {
       intervalName: iv.interval_name,
       fromTime: iv.from_time,
+      boardingTime: boarding?.arriveTime || iv.from_time,
       date,
-      route: `${start.city_name}->${end.city_name}`,
+      route: `${start.city_name}→${end.city_name}`,
       boardingStation: boarding?.name || "未知",
       dropoffStation: dropoff?.name || "未知",
       priceYuan: (iv.price_fen / 100).toFixed(2),
       residue: iv.residue,
-      bookingUrl: schemeUrl,
+      miniappName: MINIAPP_NAME,
     },
   };
 }
