@@ -11,7 +11,14 @@
  * 6. 支付取消后跳转回 cancel_url
  */
 
-const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+let stripe = null;
+try {
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+  }
+} catch (e) {
+  console.warn("[stripe] init failed:", e.message);
+}
 
 const HOST = process.env.HOST_URL || "http://localhost:3000";
 
@@ -21,6 +28,7 @@ const HOST = process.env.HOST_URL || "http://localhost:3000";
  * @returns {Promise<{success: boolean, url?: string, error?: string}>}
  */
 async function createCheckoutSession(order) {
+  if (!stripe) return { success: false, error: "Stripe not configured" };
   try {
     // 构建订单描述
     const productName = `城际巴士: ${order.startCity} → ${order.endCity}`;
@@ -88,6 +96,7 @@ async function createCheckoutSession(order) {
  * @returns {Promise<{success: boolean, paid?: boolean, error?: string}>}
  */
 async function verifySession(sessionId) {
+  if (!stripe) return { success: false, error: "Stripe not configured" };
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
@@ -114,6 +123,7 @@ async function verifySession(sessionId) {
  */
 function buildWebhookHandler(orderModule) {
   return async (req, res) => {
+    if (!stripe) return res.status(503).send("Stripe not configured");
     const sig = req.headers["stripe-signature"];
     const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -167,6 +177,7 @@ function buildWebhookHandler(orderModule) {
  * @param {number} amount - 退款金额（元），不传则全额退款
  */
 async function createRefund(paymentIntentId, amount = null) {
+  if (!stripe) return { success: false, error: "Stripe not configured" };
   try {
     const params = {
       payment_intent: paymentIntentId,
