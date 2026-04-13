@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: yuecx-assistant
+    name: yuecheng-assistant
     runtime: node
     plan: free
     rootDir: yuecx

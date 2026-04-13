@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>粤出行城际出行助手</title>
+<title>粤程助手</title>
 <style>
   :root {
     --bg: #f5f5f5;
@@ -70,13 +70,20 @@
   #send-btn:disabled { opacity: .4; cursor: default; }
   #send-btn:active:not(:disabled) { opacity: .7; }
   .hint { text-align: center; color: #999; font-size: 12px; padding: 8px 0 4px; }
+  .booking-btn {
+    display: inline-block; margin-top: 8px; padding: 10px 20px;
+    background: #07c160; color: #fff; border-radius: 8px;
+    text-decoration: none; font-size: 15px; font-weight: 600;
+    text-align: center; transition: opacity .15s;
+  }
+  .booking-btn:active { opacity: .7; }
 </style>
 </head>
 <body>
 <div id="app">
-  <header>粤出行城际出行助手</header>
+  <header>粤程助手</header>
   <div id="messages">
-    <div class="hint">支持广东省内约 89 个城市的城际巴士查询</div>
+    <div class="hint">广东省城际巴士智能查询 · 实时数据</div>
   </div>
   <div id="input-bar">
     <textarea id="input" rows="1" placeholder="输入你的问题..." enterkeyhint="send"></textarea>
@@ -85,25 +92,53 @@
 </div>
 <script>
 (function() {
-  const messagesEl = document.getElementById('messages');
-  const inputEl = document.getElementById('input');
-  const sendBtn = document.getElementById('send-btn');
-  const sessionId = 's_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-  let sending = false;
+  var messagesEl = document.getElementById('messages');
+  var inputEl = document.getElementById('input');
+  var sendBtn = document.getElementById('send-btn');
+  var sessionId = 's_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  var sending = false;
 
   function scrollBottom() {
-    requestAnimationFrame(() => { messagesEl.scrollTop = messagesEl.scrollHeight; });
+    requestAnimationFrame(function() { messagesEl.scrollTop = messagesEl.scrollHeight; });
+  }
+
+  function renderBotContent(text) {
+    var parts = text.split(/\[BOOKING_URL:(.*?)\]/g);
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) {
+        if (parts[i]) {
+          var span = document.createElement('span');
+          span.textContent = parts[i];
+          frag.appendChild(span);
+        }
+      } else {
+        var url = parts[i].trim();
+        var btn = document.createElement('a');
+        btn.href = url;
+        btn.className = 'booking-btn';
+        btn.textContent = '点击跳转订票';
+        btn.setAttribute('target', '_blank');
+        frag.appendChild(document.createElement('br'));
+        frag.appendChild(btn);
+      }
+    }
+    return frag;
   }
 
   function addMessage(text, role) {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'msg ' + role;
-    const avatar = document.createElement('div');
+    var avatar = document.createElement('div');
     avatar.className = 'avatar';
     avatar.textContent = role === 'user' ? '我' : '🚌';
-    const bubble = document.createElement('div');
+    var bubble = document.createElement('div');
     bubble.className = 'bubble';
-    bubble.textContent = text;
+    if (role === 'bot') {
+      bubble.appendChild(renderBotContent(text));
+    } else {
+      bubble.textContent = text;
+    }
     div.appendChild(avatar);
     div.appendChild(bubble);
     messagesEl.appendChild(div);
@@ -112,15 +147,15 @@
   }
 
   function addTyping() {
-    const div = document.createElement('div');
+    var div = document.createElement('div');
     div.className = 'msg bot typing';
     div.id = 'typing-indicator';
-    const avatar = document.createElement('div');
+    var avatar = document.createElement('div');
     avatar.className = 'avatar';
     avatar.textContent = '🚌';
-    const bubble = document.createElement('div');
+    var bubble = document.createElement('div');
     bubble.className = 'bubble';
-    bubble.textContent = '思考中';
+    bubble.textContent = '查询中';
     div.appendChild(avatar);
     div.appendChild(bubble);
     messagesEl.appendChild(div);
@@ -128,7 +163,7 @@
   }
 
   function removeTyping() {
-    const el = document.getElementById('typing-indicator');
+    var el = document.getElementById('typing-indicator');
     if (el) el.remove();
   }
 
@@ -138,7 +173,7 @@
   }
 
   async function send() {
-    const text = inputEl.value.trim();
+    var text = inputEl.value.trim();
     if (!text || sending) return;
     sending = true;
     sendBtn.disabled = true;
@@ -148,14 +183,14 @@
     addTyping();
 
     try {
-      const resp = await fetch('/api/chat', {
+      var resp = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, message: text }),
+        body: JSON.stringify({ sessionId: sessionId, message: text }),
       });
       removeTyping();
       if (!resp.ok) throw new Error('服务异常');
-      const data = await resp.json();
+      var data = await resp.json();
       addMessage(data.reply || '（无回复）', 'bot');
     } catch (e) {
       removeTyping();
@@ -173,7 +208,7 @@
   });
   inputEl.addEventListener('input', autoGrow);
 
-  addMessage('你好！我是粤出行城际出行助手。\n\n你可以告诉我你想从哪里到哪里，我来帮你找到最合适的城际巴士班次。\n\n例如："我想从广州去深圳" 或 "明天从珠海到佛山最便宜的班次"', 'bot');
+  addMessage('你好！我是粤程助手。\n\n告诉我你想从哪里到哪里，我来帮你找到最合适的城际巴士班次，还可以一键生成订票链接。\n\n例如："我想从广州去深圳" 或 "明天从珠海到佛山最便宜的班次"', 'bot');
 })();
 </script>
 </body>

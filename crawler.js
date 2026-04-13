@@ -1,11 +1,6 @@
 /**
- * 粤出行城际巴士数据爬虫 — 全城市版
- * 支持三种模式:
- *   --mode meta   同步城市+路线元数据
- *   --mode full   全量爬取所有路线（未来 N 天）
- *   --mode hot    只爬热门路线（今天+明天）
- *
- * 数据写入 PostgreSQL (DATABASE_URL)。
+ * 数据源 API 层 — 实时查询 + 元数据同步
+ * 仅保留按需实时查询和城市/路线元数据同步。
  */
 
 const crypto = require("crypto");
@@ -90,31 +85,11 @@ async function requestGETv1(apiPath, params = {}) {
   return resp.json();
 }
 
-module.exports = { requestGETv1, getChallengeHeaders };
-
 // ── Helpers ─────────────────────────────────────────────────
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-function formatDate(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function generateDateList(days) {
-  const dates = [];
-  const now = new Date();
-  for (let i = 0; i < days; i++) {
-    const d = new Date(now);
-    d.setDate(now.getDate() + i);
-    dates.push(formatDate(d));
-  }
-  return dates;
-}
-
-// ── Mode: meta — 同步城市和路线 ─────────────────────────────
+// ── 元数据同步 ──────────────────────────────────────────────
 
 async function syncMeta() {
   console.log("[meta] 同步城市列表...");
@@ -148,7 +123,7 @@ async function syncMeta() {
   console.log(`[meta] ${routeCount} 条路线已同步`);
 }
 
-// ── 爬取单条路线单日 ────────────────────────────────────────
+// ── 按需实时查询单路线单日 ───────────────────────────────────
 
 async function fetchRouteDay(routeId, startCityId, endCityId, tripDate) {
   let start = 0;
@@ -199,76 +174,6 @@ async function fetchRouteDay(routeId, startCityId, endCityId, tripDate) {
   return all.length;
 }
 
-// ── Mode: full — 全量爬取 ───────────────────────────────────
-
-async function crawlFull(days = 7, chunk = null, totalChunks = null) {
-  const routes = await db.getAllRoutes();
-  const dates = generateDateList(days);
-
-  let filtered = routes;
-  if (chunk !== null && totalChunks !== null) {
-    filtered = routes.filter((r) => r.id % totalChunks === chunk);
-    console.log(`[full] Chunk ${chunk}/${totalChunks}: ${filtered.length} / ${routes.length} 条路线`);
-  }
-
-  console.log(`[full] ${filtered.length} 条路线 x ${dates.length} 天`);
-  let totalIntervals = 0;
-
-  for (let i = 0; i < filtered.length; i++) {
-    const r = filtered[i];
-    let routeTotal = 0;
-    for (const date of dates) {
-      try {
-        const count = await fetchRouteDay(r.id, r.start_city_id, r.end_city_id, date);
-        routeTotal += count;
-      } catch (err) {
-        console.error(`  ✗ ${r.start_name}→${r.end_name} ${date}: ${err.message}`);
-      }
-      await sleep(200);
-    }
-    totalIntervals += routeTotal;
-    await db.updateRouteLastCrawl(r.id);
-    if (i % 20 === 0 || routeTotal > 0) {
-      console.log(`  [${i + 1}/${filtered.length}] ${r.start_name}→${r.end_name}: ${routeTotal} 条`);
-    }
-  }
-
-  console.log(`[full] 完成: ${totalIntervals} 条班次`);
-  return totalIntervals;
-}
-
-// ── Mode: hot — 热门路线 ────────────────────────────────────
-
-async function crawlHot() {
-  const routes = await db.getHotRoutes();
-  if (routes.length === 0) {
-    console.log("[hot] 无热门路线。请先在 routes 表中设置 is_hot = TRUE。");
-    return 0;
-  }
-  const dates = generateDateList(2); // today + tomorrow
-  console.log(`[hot] ${routes.length} 条热门路线 x ${dates.length} 天`);
-
-  let total = 0;
-  for (const r of routes) {
-    for (const date of dates) {
-      try {
-        const count = await fetchRouteDay(r.id, r.start_city_id, r.end_city_id, date);
-        total += count;
-      } catch (err) {
-        console.error(`  ✗ ${r.start_name}→${r.end_name} ${date}: ${err.message}`);
-      }
-      await sleep(200);
-    }
-    await db.updateRouteLastCrawl(r.id);
-    console.log(`  ${r.start_name}→${r.end_name} done`);
-  }
-
-  console.log(`[hot] 完成: ${total} 条班次`);
-  return total;
-}
-
-// ── 按需爬取单路线（API 服务器调用） ────────────────────────
-
 async function crawlOnDemand(startCityId, endCityId, date) {
   const routeId = await db.getRouteId(startCityId, endCityId);
   if (!routeId) return 0;
@@ -277,34 +182,17 @@ async function crawlOnDemand(startCityId, endCityId, date) {
   return count;
 }
 
-module.exports.crawlOnDemand = crawlOnDemand;
-module.exports.syncMeta = syncMeta;
+module.exports = { requestGETv1, getChallengeHeaders, crawlOnDemand, syncMeta };
 
 // ── CLI ─────────────────────────────────────────────────────
 
 if (require.main === module) {
-  const args = process.argv.slice(2);
-  const modeIdx = args.indexOf("--mode");
-  const mode = modeIdx >= 0 ? args[modeIdx + 1] : "full";
-  const chunkIdx = args.indexOf("--chunk");
-  const chunk = chunkIdx >= 0 ? parseInt(args[chunkIdx + 1], 10) : null;
-  const chunksIdx = args.indexOf("--total-chunks");
-  const totalChunks = chunksIdx >= 0 ? parseInt(args[chunksIdx + 1], 10) : null;
-  const daysIdx = args.indexOf("--days");
-  const days = daysIdx >= 0 ? parseInt(args[daysIdx + 1], 10) : 7;
-
   (async () => {
     try {
-      if (mode === "meta") {
-        await syncMeta();
-      } else if (mode === "hot") {
-        await crawlHot();
-      } else {
-        await crawlFull(days, chunk, totalChunks);
-      }
+      await syncMeta();
       await db.cleanExpired();
     } catch (err) {
-      console.error("Crawl failed:", err);
+      console.error("Sync failed:", err);
       process.exit(1);
     } finally {
       await db.close();

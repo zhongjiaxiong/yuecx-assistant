@@ -1,13 +1,11 @@
 {
-  "name": "yuecx-assistant",
-  "version": "1.0.0",
-  "description": "粤出行城际出行助手",
+  "name": "yuecheng-assistant",
+  "version": "2.0.0",
+  "description": "粤程助手 — 广东省城际巴士智能查询推荐",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "crawl:hot": "node crawler.js --mode hot",
-    "crawl:full": "node crawler.js --mode full",
-    "crawl:meta": "node crawler.js --mode meta",
+    "sync:meta": "node crawler.js",
     "migrate": "node db.js --migrate"
   },
   "engines": {

@@ -1,5 +1,5 @@
 /**
- * 粤出行城际出行助手 — Express API 服务
+ * 粤程助手 — Express API 服务
  * POST /api/chat  — 对话接口
  * GET  /          — 聊天页面
  * GET  /api/health — 健康检查
