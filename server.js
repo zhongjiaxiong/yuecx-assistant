@@ -8,7 +8,13 @@
 require("dotenv/config");
 const express = require("express");
 const path = require("path");
+const multer = require("multer");
 const { chat, buildSystemPrompt } = require("./agent");
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+const LLM_BASE_URL = process.env.LLM_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1";
+const LLM_API_KEY = process.env.LLM_API_KEY || "";
 
 const app = express();
 app.use(express.json());
@@ -60,6 +66,39 @@ app.post("/api/chat", async (req, res) => {
     clearTimeout(timeout);
     console.error("Chat error:", err);
     if (!res.headersSent) res.status(500).json({ error: "服务异常，请稍后重试" });
+  }
+});
+
+app.post("/api/stt", upload.single("audio"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "缺少音频文件" });
+
+  try {
+    const FormData = (await import("formdata-node")).FormData;
+    const { Blob } = (await import("buffer"));
+
+    const form = new FormData();
+    const ext = (req.file.mimetype || "audio/webm").includes("mp4") ? "m4a" : "webm";
+    form.set("file", new Blob([req.file.buffer], { type: req.file.mimetype }), `audio.${ext}`);
+    form.set("model", "paraformer-v2");
+    form.set("language", "zh");
+
+    const resp = await fetch(`${LLM_BASE_URL}/audio/transcriptions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${LLM_API_KEY}` },
+      body: form,
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      console.error("STT error:", resp.status, errText);
+      return res.status(502).json({ error: "语音识别失败" });
+    }
+
+    const data = await resp.json();
+    res.json({ text: data.text || "" });
+  } catch (err) {
+    console.error("STT error:", err);
+    res.status(500).json({ error: "语音识别异常" });
   }
 });
 

@@ -6,20 +6,12 @@
 <title>粤程助手</title>
 <style>
   :root {
-    --bg: #f5f5f5;
-    --chat-bg: #fff;
-    --user-bubble: #07c160;
-    --user-text: #fff;
-    --bot-bubble: #fff;
-    --bot-text: #333;
-    --border: #e5e5e5;
-    --input-bg: #fff;
-    --shadow: rgba(0,0,0,0.06);
-    --green: #07c160;
-    --green-light: #e8f8ee;
+    --bg: #f5f5f5; --chat-bg: #fff; --green: #07c160; --green-light: #e8f8ee;
+    --user-bubble: #07c160; --user-text: #fff; --bot-bubble: #fff; --bot-text: #333;
+    --border: #e5e5e5; --input-bg: #fff; --shadow: rgba(0,0,0,0.06);
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif; background: var(--bg); }
+  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); }
   #app {
     display: flex; flex-direction: column; height: 100dvh; max-width: 480px; margin: 0 auto;
     background: var(--chat-bg); box-shadow: 0 0 20px var(--shadow);
@@ -29,75 +21,95 @@
     font-size: 17px; font-weight: 600; text-align: center;
   }
   #messages {
-    flex: 1; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch;
-    scroll-behavior: smooth;
+    flex: 1; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch; scroll-behavior: smooth;
   }
   .msg { display: flex; margin-bottom: 14px; gap: 8px; animation: fadeIn .2s ease; }
   .msg.user { flex-direction: row-reverse; }
   .bubble {
     max-width: 82%; padding: 10px 14px; border-radius: 16px; line-height: 1.6;
-    font-size: 15px; word-break: break-word; white-space: pre-wrap; position: relative;
+    font-size: 15px; word-break: break-word; white-space: pre-wrap;
   }
   .msg.bot .bubble { background: var(--bot-bubble); color: var(--bot-text); border: 1px solid var(--border); border-top-left-radius: 4px; }
   .msg.user .bubble { background: var(--user-bubble); color: var(--user-text); border-top-right-radius: 4px; }
   .avatar {
     width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px; background: #e8e8e8;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; background: #e8e8e8;
   }
   .msg.user .avatar { background: var(--green); color: #fff; }
   .typing .bubble::after {
     content: ''; display: inline-block; width: 6px; height: 6px;
-    background: #999; border-radius: 50%; margin-left: 4px;
-    animation: blink 1s infinite;
+    background: #999; border-radius: 50%; margin-left: 4px; animation: blink 1s infinite;
   }
-  @keyframes blink { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes blink { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+  .hint { text-align: center; color: #999; font-size: 12px; padding: 8px 0 4px; }
+
+  /* Input Bar */
   #input-bar {
-    flex-shrink: 0; display: flex; gap: 8px; padding: 10px 12px;
+    flex-shrink: 0; display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px;
     border-top: 1px solid var(--border); background: #fafafa;
   }
+  .ib-toggle {
+    flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%;
+    background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .ib-toggle svg { width: 24px; height: 24px; fill: #666; }
   #input {
-    flex: 1; padding: 10px 14px; border: 1px solid var(--border); border-radius: 20px;
+    flex: 1; padding: 8px 14px; border: 1px solid var(--border); border-radius: 20px;
     font-size: 15px; outline: none; background: var(--input-bg); resize: none;
-    min-height: 40px; max-height: 120px; line-height: 1.4;
+    min-height: 36px; max-height: 120px; line-height: 1.4;
   }
   #input:focus { border-color: var(--green); }
   #send-btn {
-    flex-shrink: 0; width: 64px; border: none; border-radius: 20px;
-    background: var(--green); color: #fff; font-size: 15px; font-weight: 600;
-    cursor: pointer; transition: opacity .15s;
+    flex-shrink: 0; width: 56px; height: 36px; border: none; border-radius: 18px;
+    background: var(--green); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
   }
-  #send-btn:disabled { opacity: .4; cursor: default; }
-  #send-btn:active:not(:disabled) { opacity: .7; }
+  #send-btn:disabled { opacity: .4; }
 
-  /* Mic (voice input) button */
-  #mic-btn {
-    flex-shrink: 0; width: 40px; height: 40px; border: none; border-radius: 50%;
-    background: transparent; cursor: pointer; display: flex; align-items: center;
-    justify-content: center; transition: background .15s; position: relative;
+  /* Voice Button (WeChat style) */
+  #voice-btn {
+    flex: 1; height: 36px; border: 1px solid var(--border); border-radius: 20px;
+    background: #fff; font-size: 15px; color: #333; font-weight: 500;
+    cursor: pointer; display: none; user-select: none; -webkit-user-select: none;
+    transition: background .1s;
   }
-  #mic-btn:hover { background: #f0f0f0; }
-  #mic-btn svg { width: 22px; height: 22px; fill: #666; transition: fill .15s; }
-  #mic-btn.recording { background: #fde8e8; }
-  #mic-btn.recording svg { fill: #e53935; }
-  #mic-btn.recording::after {
-    content: ''; position: absolute; inset: -4px; border-radius: 50%;
-    border: 2px solid #e53935; animation: mic-pulse 1.2s ease-out infinite;
-  }
-  #mic-btn.unsupported { display: none; }
-  @keyframes mic-pulse { 0% { opacity: .8; transform: scale(1); } 100% { opacity: 0; transform: scale(1.5); } }
+  #voice-btn:active, #voice-btn.pressing { background: #e0e0e0; }
+  .voice-mode #input, .voice-mode #send-btn { display: none; }
+  .voice-mode #voice-btn { display: block; }
 
-  .hint { text-align: center; color: #999; font-size: 12px; padding: 8px 0 4px; }
+  /* Recording Overlay */
+  #rec-overlay {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.4); justify-content: center; align-items: center;
+    flex-direction: column; gap: 16px;
+  }
+  #rec-overlay.active { display: flex; }
+  .rec-box {
+    width: 160px; height: 160px; border-radius: 20px; background: rgba(0,0,0,0.75);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  }
+  .rec-box.cancel { background: rgba(220,50,50,0.85); }
+  .rec-waves { display: flex; align-items: center; gap: 3px; height: 40px; }
+  .rec-waves span {
+    width: 4px; border-radius: 2px; background: #07c160;
+    animation: wave 0.8s ease-in-out infinite alternate;
+  }
+  .rec-box.cancel .rec-waves span { background: #fff; }
+  .rec-waves span:nth-child(1) { height: 12px; animation-delay: 0s; }
+  .rec-waves span:nth-child(2) { height: 20px; animation-delay: 0.1s; }
+  .rec-waves span:nth-child(3) { height: 32px; animation-delay: 0.2s; }
+  .rec-waves span:nth-child(4) { height: 24px; animation-delay: 0.3s; }
+  .rec-waves span:nth-child(5) { height: 16px; animation-delay: 0.4s; }
+  @keyframes wave { from { transform: scaleY(0.4); } to { transform: scaleY(1); } }
+  .rec-text { color: #fff; font-size: 14px; text-align: center; }
+  .rec-hint { color: rgba(255,255,255,0.7); font-size: 13px; }
 
   /* Route Results Card */
   .rr-wrap { margin-top: 8px; }
   .rr-item {
-    display: flex; align-items: stretch; gap: 0; margin-bottom: 8px;
-    border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
-    background: #fff; cursor: pointer; transition: border-color .15s;
+    display: flex; align-items: stretch; margin-bottom: 8px;
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff;
   }
-  .rr-item:active { border-color: var(--green); }
   .rr-item.has-warn { border-left: 3px solid #faad14; }
   .rr-rank {
     display: flex; align-items: center; justify-content: center;
@@ -112,26 +124,17 @@
   .rr-price { font-weight: 600; color: #f5222d; }
   .rr-seats { color: #999; }
   .rr-warn { color: #faad14; font-size: 11px; }
-  .rr-right {
-    display: flex; align-items: center; padding: 0 10px; flex-shrink: 0;
-  }
+  .rr-right { display: flex; align-items: center; padding: 0 10px; flex-shrink: 0; }
   .rr-book-btn {
     padding: 6px 10px; border: 1px solid var(--green); border-radius: 14px;
-    background: #fff; color: var(--green); font-size: 12px; font-weight: 600;
-    cursor: pointer; white-space: nowrap; transition: all .15s;
+    background: #fff; color: var(--green); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
   }
   .rr-book-btn:active { background: var(--green); color: #fff; }
   .rr-footer { font-size: 12px; color: #999; padding: 2px 0; }
 
   /* Booking Card */
-  .bk-card {
-    margin-top: 10px; border: 1px solid var(--border); border-radius: 12px;
-    overflow: hidden; background: #fafffe;
-  }
-  .bk-header {
-    background: var(--green); color: #fff; padding: 10px 14px;
-    font-size: 14px; font-weight: 600;
-  }
+  .bk-card { margin-top: 10px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fafffe; }
+  .bk-header { background: var(--green); color: #fff; padding: 10px 14px; font-size: 14px; font-weight: 600; }
   .bk-body { padding: 10px 14px; font-size: 13px; line-height: 1.8; color: #333; }
   .bk-row { display: flex; gap: 6px; }
   .bk-label { color: #999; flex-shrink: 0; min-width: 48px; }
@@ -139,14 +142,11 @@
   .bk-actions { padding: 10px 14px; border-top: 1px solid #f0f0f0; }
   .bk-copy {
     width: 100%; padding: 10px; border: none; border-radius: 8px;
-    background: var(--green); color: #fff; font-size: 14px; font-weight: 600;
-    cursor: pointer; transition: opacity .15s;
+    background: var(--green); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
   }
   .bk-copy:active { opacity: .7; }
   .bk-copy.copied { background: #999; }
-  .bk-guide {
-    padding: 10px 14px; background: #f8f8f8; font-size: 12px; color: #666; line-height: 1.7;
-  }
+  .bk-guide { padding: 10px 14px; background: #f8f8f8; font-size: 12px; color: #666; line-height: 1.7; }
   .bk-guide b { color: #333; }
 </style>
 </head>
@@ -157,88 +157,157 @@
     <div class="hint">广东省城际巴士智能查询 · 实时数据</div>
   </div>
   <div id="input-bar">
-    <button id="mic-btn" title="语音输入">
-      <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm-1-9a1 1 0 1 1 2 0v6a1 1 0 1 1-2 0V5zm6 6a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.93V20H8v2h8v-2h-3v-2.07A7 7 0 0 0 19 11h-2z"/></svg>
+    <button class="ib-toggle" id="mode-toggle" title="切换语音/文字">
+      <svg id="icon-mic" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.93V20H8v2h8v-2h-3v-2.07A7 7 0 0019 11h-2z"/></svg>
+      <svg id="icon-kbd" style="display:none" viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 12H4V7h16v10zM6 10h2v2H6v-2zm0 4h8v2H6v-2zm10 0h2v2h-2v-2zm0-4h2v2h-2v-2zm-4 0h2v2h-2v-2z"/></svg>
     </button>
     <textarea id="input" rows="1" placeholder="输入你的问题..." enterkeyhint="send"></textarea>
+    <button id="voice-btn">按住 说话</button>
     <button id="send-btn">发送</button>
   </div>
 </div>
+
+<div id="rec-overlay">
+  <div class="rec-box" id="rec-box">
+    <div class="rec-waves"><span></span><span></span><span></span><span></span><span></span></div>
+    <div class="rec-text" id="rec-text">正在录音...</div>
+  </div>
+  <div class="rec-hint" id="rec-hint">↑ 上滑取消</div>
+</div>
+
 <script>
 (function() {
   var messagesEl = document.getElementById('messages');
   var inputEl = document.getElementById('input');
   var sendBtn = document.getElementById('send-btn');
-  var micBtn = document.getElementById('mic-btn');
+  var modeToggle = document.getElementById('mode-toggle');
+  var iconMic = document.getElementById('icon-mic');
+  var iconKbd = document.getElementById('icon-kbd');
+  var voiceBtn = document.getElementById('voice-btn');
+  var inputBar = document.getElementById('input-bar');
+  var recOverlay = document.getElementById('rec-overlay');
+  var recBox = document.getElementById('rec-box');
+  var recText = document.getElementById('rec-text');
+  var recHint = document.getElementById('rec-hint');
+
   var sessionId = 's_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
   var sending = false;
+  var voiceMode = false;
 
-  // --- Speech Recognition ---
-  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  var recognition = null;
-  var isRecording = false;
-
-  if (SpeechRecognition) {
-    recognition = new SpeechRecognition();
-    recognition.lang = 'zh-CN';
-    recognition.continuous = true;
-    recognition.interimResults = true;
-
-    var finalTranscript = '';
-
-    recognition.onresult = function(e) {
-      var interim = '';
-      for (var i = e.resultIndex; i < e.results.length; i++) {
-        var t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) {
-          finalTranscript += t;
-        } else {
-          interim += t;
-        }
-      }
-      inputEl.value = finalTranscript + interim;
-      autoGrow();
-    };
-
-    recognition.onerror = function(e) {
-      if (e.error === 'no-speech') return;
-      console.warn('Speech recognition error:', e.error);
-      stopRecording();
-    };
-
-    recognition.onend = function() {
-      if (isRecording) {
-        // Auto-stopped by browser (e.g. silence timeout), restart to keep listening
-        try { recognition.start(); } catch(_) { stopRecording(); }
-      }
-    };
-  } else {
-    micBtn.classList.add('unsupported');
-  }
-
-  function startRecording() {
-    if (!recognition || isRecording) return;
-    finalTranscript = inputEl.value;
-    isRecording = true;
-    micBtn.classList.add('recording');
-    micBtn.title = '点击停止';
-    try { recognition.start(); } catch(_) {}
-  }
-
-  function stopRecording() {
-    if (!recognition) return;
-    isRecording = false;
-    micBtn.classList.remove('recording');
-    micBtn.title = '语音输入';
-    try { recognition.stop(); } catch(_) {}
-    inputEl.focus();
-  }
-
-  micBtn.addEventListener('click', function() {
-    if (isRecording) { stopRecording(); }
-    else { startRecording(); }
+  // --- Mode Toggle ---
+  modeToggle.addEventListener('click', function() {
+    voiceMode = !voiceMode;
+    if (voiceMode) {
+      inputBar.classList.add('voice-mode');
+      iconMic.style.display = 'none';
+      iconKbd.style.display = '';
+    } else {
+      inputBar.classList.remove('voice-mode');
+      iconMic.style.display = '';
+      iconKbd.style.display = 'none';
+      inputEl.focus();
+    }
   });
 
+  // --- Voice Recording (press & hold) ---
+  var mediaRecorder = null;
+  var audioChunks = [];
+  var recStartY = 0;
+  var cancelled = false;
+
+  function startRec(startY) {
+    recStartY = startY;
+    cancelled = false;
+    audioChunks = [];
+    recBox.classList.remove('cancel');
+    recText.textContent = '正在录音...';
+    recHint.textContent = '↑ 上滑取消';
+    recOverlay.classList.add('active');
+    voiceBtn.classList.add('pressing');
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+      var mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType: mimeType } : {});
+      mediaRecorder.ondataavailable = function(e) { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = function() {
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        if (!cancelled && audioChunks.length > 0) {
+          var blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+          handleVoiceBlob(blob);
+        }
+      };
+      mediaRecorder.start();
+    }).catch(function(err) {
+      console.error('Mic access denied:', err);
+      recOverlay.classList.remove('active');
+      voiceBtn.classList.remove('pressing');
+      addMessage('无法访问麦克风，请在浏览器设置中允许', 'bot');
+    });
+  }
+
+  function moveRec(currentY) {
+    var diff = recStartY - currentY;
+    if (diff > 60) {
+      recBox.classList.add('cancel');
+      recText.textContent = '松开取消';
+      recHint.textContent = '';
+      cancelled = true;
+    } else {
+      recBox.classList.remove('cancel');
+      recText.textContent = '正在录音...';
+      recHint.textContent = '↑ 上滑取消';
+      cancelled = false;
+    }
+  }
+
+  function stopRec() {
+    recOverlay.classList.remove('active');
+    voiceBtn.classList.remove('pressing');
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+  }
+
+  // Touch events
+  voiceBtn.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    startRec(e.touches[0].clientY);
+  }, { passive: false });
+  voiceBtn.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    moveRec(e.touches[0].clientY);
+  }, { passive: false });
+  voiceBtn.addEventListener('touchend', function(e) { e.preventDefault(); stopRec(); });
+  voiceBtn.addEventListener('touchcancel', function(e) { cancelled = true; stopRec(); });
+
+  // Mouse events (for desktop testing)
+  voiceBtn.addEventListener('mousedown', function(e) { startRec(e.clientY); });
+  document.addEventListener('mousemove', function(e) { if (mediaRecorder && mediaRecorder.state === 'recording') moveRec(e.clientY); });
+  document.addEventListener('mouseup', function() { if (mediaRecorder && mediaRecorder.state === 'recording') stopRec(); });
+
+  async function handleVoiceBlob(blob) {
+    addTyping();
+    var form = new FormData();
+    form.append('audio', blob, 'voice.webm');
+    try {
+      var resp = await fetch('/api/stt', { method: 'POST', body: form });
+      if (!resp.ok) throw new Error('STT failed');
+      var data = await resp.json();
+      removeTyping();
+      if (data.text && data.text.trim()) {
+        addMessage(data.text.trim(), 'user');
+        doChat(data.text.trim());
+      } else {
+        addMessage('没有识别到语音，请再试一次', 'bot');
+      }
+    } catch(e) {
+      removeTyping();
+      addMessage('语音识别失败，请重试', 'bot');
+    }
+  }
+
+  // --- Chat ---
   function scrollBottom() {
     requestAnimationFrame(function() { messagesEl.scrollTop = messagesEl.scrollHeight; });
   }
@@ -247,12 +316,9 @@
 
   function shortenStation(name) {
     if (!name) return '';
-    return name
-      .replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
-      .replace(/地铁站[A-Z]?\d*口?/g, '站')
-      .replace(/公交站/g, '站')
-      .replace(/旁边|路边|前面|出来|左转/g, '')
-      .trim();
+    return name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
+      .replace(/地铁站[A-Z]?\d*口?/g, '站').replace(/公交站/g, '站')
+      .replace(/旁边|路边|前面|出来|左转/g, '').trim();
   }
 
   function renderBotContent(text) {
@@ -260,245 +326,122 @@
     var re = /\[(ROUTE_RESULTS|BOOKING_CARD):([\s\S]*?)\]/g;
     var last = 0, m;
     while ((m = re.exec(text)) !== null) {
-      if (m.index > last) {
-        var span = document.createElement('span');
-        span.textContent = text.slice(last, m.index);
-        frag.appendChild(span);
-      }
+      if (m.index > last) { var sp = document.createElement('span'); sp.textContent = text.slice(last, m.index); frag.appendChild(sp); }
       try {
-        var data = JSON.parse(m[2].trim());
-        if (m[1] === 'ROUTE_RESULTS') frag.appendChild(buildRouteResults(data));
-        else frag.appendChild(buildBookingCard(data));
-      } catch(e) {
-        var s2 = document.createElement('span');
-        s2.textContent = m[0];
-        frag.appendChild(s2);
-      }
+        var d = JSON.parse(m[2].trim());
+        frag.appendChild(m[1] === 'ROUTE_RESULTS' ? buildRouteResults(d) : buildBookingCard(d));
+      } catch(e) { var s2 = document.createElement('span'); s2.textContent = m[0]; frag.appendChild(s2); }
       last = re.lastIndex;
     }
-    if (last < text.length) {
-      var tail = document.createElement('span');
-      tail.textContent = text.slice(last);
-      frag.appendChild(tail);
-    }
+    if (last < text.length) { var tail = document.createElement('span'); tail.textContent = text.slice(last); frag.appendChild(tail); }
     return frag;
   }
 
   function buildRouteResults(data) {
     var items = data.items || data;
     if (!Array.isArray(items)) return document.createTextNode('');
-    var wrap = document.createElement('div');
-    wrap.className = 'rr-wrap';
+    var wrap = document.createElement('div'); wrap.className = 'rr-wrap';
     items.forEach(function(it, idx) {
-      var el = document.createElement('div');
-      el.className = 'rr-item' + (it.warn ? ' has-warn' : '');
-
-      var rank = document.createElement('div');
-      rank.className = 'rr-rank';
-      rank.textContent = idx + 1;
-
-      var body = document.createElement('div');
-      body.className = 'rr-body';
-
-      var top = document.createElement('div');
-      top.className = 'rr-top';
-      var time = document.createElement('span');
-      time.className = 'rr-time';
-      time.textContent = it.time || '';
-      var route = document.createElement('span');
-      route.className = 'rr-route';
-      route.textContent = shortenStation(it.boarding) + ' → ' + shortenStation(it.dropoff);
-      top.appendChild(time);
-      top.appendChild(route);
-
-      var bot = document.createElement('div');
-      bot.className = 'rr-bottom';
-      var price = document.createElement('span');
-      price.className = 'rr-price';
-      price.textContent = '¥' + (it.price || '');
-      var seats = document.createElement('span');
-      seats.className = 'rr-seats';
-      seats.textContent = '余' + (it.seats != null ? it.seats : '?') + '座';
-      bot.appendChild(price);
-      bot.appendChild(seats);
-      if (it.warn) {
-        var warn = document.createElement('span');
-        warn.className = 'rr-warn';
-        warn.textContent = '⚠ ' + it.warn;
-        bot.appendChild(warn);
-      }
-
-      body.appendChild(top);
-      body.appendChild(bot);
-
-      var right = document.createElement('div');
-      right.className = 'rr-right';
-      var btn = document.createElement('button');
-      btn.className = 'rr-book-btn';
-      btn.textContent = '订票';
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        inputEl.value = '订第' + (idx + 1) + '班';
-        send();
+      var el = document.createElement('div'); el.className = 'rr-item' + (it.warn ? ' has-warn' : '');
+      el.innerHTML =
+        '<div class="rr-rank">' + (idx+1) + '</div>' +
+        '<div class="rr-body">' +
+          '<div class="rr-top"><span class="rr-time">' + esc(it.time||'') + '</span><span class="rr-route">' + esc(shortenStation(it.boarding)) + ' → ' + esc(shortenStation(it.dropoff)) + '</span></div>' +
+          '<div class="rr-bottom"><span class="rr-price">¥' + esc(it.price||'') + '</span><span class="rr-seats">余' + (it.seats!=null?it.seats:'?') + '座</span>' +
+          (it.warn ? '<span class="rr-warn">⚠ ' + esc(it.warn) + '</span>' : '') + '</div>' +
+        '</div>' +
+        '<div class="rr-right"><button class="rr-book-btn">订票</button></div>';
+      el.querySelector('.rr-book-btn').addEventListener('click', function(e) {
+        e.stopPropagation(); inputEl.value = '订第' + (idx+1) + '班'; send();
       });
-      right.appendChild(btn);
-
-      el.appendChild(rank);
-      el.appendChild(body);
-      el.appendChild(right);
       wrap.appendChild(el);
     });
-    if (data.tip) {
-      var footer = document.createElement('div');
-      footer.className = 'rr-footer';
-      footer.textContent = data.tip;
-      wrap.appendChild(footer);
-    }
+    if (data.tip) { var f = document.createElement('div'); f.className = 'rr-footer'; f.textContent = data.tip; wrap.appendChild(f); }
     return wrap;
   }
 
   function buildBookingCard(info) {
-    var card = document.createElement('div');
-    card.className = 'bk-card';
+    var card = document.createElement('div'); card.className = 'bk-card';
+    var bodyHtml = '';
+    [['路线',info.route],['日期',info.date],['上车',(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||'')],
+     ['下车',info.dropoffStation],['票价',info.priceYuan?'¥'+info.priceYuan:''],['余票',info.residue!=null?info.residue+'张':'']
+    ].forEach(function(r){ if(r[1]) bodyHtml += '<div class="bk-row"><span class="bk-label">'+esc(r[0])+'</span><span class="bk-val">'+esc(r[1])+'</span></div>'; });
 
-    var header = document.createElement('div');
-    header.className = 'bk-header';
-    header.textContent = '🎫 订票信息';
-    card.appendChild(header);
+    card.innerHTML =
+      '<div class="bk-header">🎫 订票信息</div>' +
+      '<div class="bk-body">' + bodyHtml + '</div>' +
+      '<div class="bk-actions"><button class="bk-copy">📋 复制订票信息</button></div>' +
+      '<div class="bk-guide">📱 微信搜「<b>粤出行城际巴士</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找 <b>' + esc(info.fromTime||'') + '</b> 班次下单</div>';
 
-    var body = document.createElement('div');
-    body.className = 'bk-body';
-    [
-      ['路线', info.route], ['日期', info.date],
-      ['上车', (info.boardingTime || info.fromTime || '') + ' ' + (info.boardingStation || '')],
-      ['下车', info.dropoffStation], ['票价', info.priceYuan ? '¥' + info.priceYuan : ''],
-      ['余票', info.residue != null ? info.residue + '张' : ''],
-    ].forEach(function(r) {
-      if (!r[1]) return;
-      var row = document.createElement('div');
-      row.className = 'bk-row';
-      row.innerHTML = '<span class="bk-label">' + esc(r[0]) + '</span><span class="bk-val">' + esc(r[1]) + '</span>';
-      body.appendChild(row);
-    });
-    card.appendChild(body);
-
-    var actions = document.createElement('div');
-    actions.className = 'bk-actions';
-    var copyBtn = document.createElement('button');
-    copyBtn.className = 'bk-copy';
-    copyBtn.textContent = '📋 复制订票信息';
-    var copyText = [info.route, info.date, (info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''), '下车: '+(info.dropoffStation||''), '票价: ¥'+(info.priceYuan||'')].join('\n');
+    var copyBtn = card.querySelector('.bk-copy');
+    var copyText = [info.route,info.date,(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''),'下车: '+(info.dropoffStation||''),'票价: ¥'+(info.priceYuan||'')].join('\n');
     copyBtn.addEventListener('click', function() {
       navigator.clipboard.writeText(copyText).then(function() {
-        copyBtn.textContent = '✅ 已复制';
-        copyBtn.classList.add('copied');
+        copyBtn.textContent = '✅ 已复制'; copyBtn.classList.add('copied');
         setTimeout(function() { copyBtn.textContent = '📋 复制订票信息'; copyBtn.classList.remove('copied'); }, 2000);
       });
     });
-    actions.appendChild(copyBtn);
-    card.appendChild(actions);
-
-    var guide = document.createElement('div');
-    guide.className = 'bk-guide';
-    guide.innerHTML = '📱 微信搜「<b>粤出行城际巴士</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找到 <b>' + esc(info.fromTime||'') + '</b> 班次下单';
-    card.appendChild(guide);
-
     return card;
   }
 
   function addMessage(text, role) {
-    var div = document.createElement('div');
-    div.className = 'msg ' + role;
-    var avatar = document.createElement('div');
-    avatar.className = 'avatar';
+    var div = document.createElement('div'); div.className = 'msg ' + role;
+    var avatar = document.createElement('div'); avatar.className = 'avatar';
     avatar.textContent = role === 'user' ? '我' : '🚌';
-    var bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    if (role === 'bot') {
-      bubble.appendChild(renderBotContent(text));
-    } else {
-      bubble.textContent = text;
-    }
-    div.appendChild(avatar);
-    div.appendChild(bubble);
-    messagesEl.appendChild(div);
-    scrollBottom();
-    return div;
+    var bubble = document.createElement('div'); bubble.className = 'bubble';
+    if (role === 'bot') bubble.appendChild(renderBotContent(text));
+    else bubble.textContent = text;
+    div.appendChild(avatar); div.appendChild(bubble);
+    messagesEl.appendChild(div); scrollBottom();
   }
 
   function addTyping() {
-    var div = document.createElement('div');
-    div.className = 'msg bot typing';
-    div.id = 'typing-indicator';
-    var avatar = document.createElement('div');
-    avatar.className = 'avatar';
-    avatar.textContent = '🚌';
-    var bubble = document.createElement('div');
-    bubble.className = 'bubble';
-    bubble.textContent = '查询中';
-    div.appendChild(avatar);
-    div.appendChild(bubble);
-    messagesEl.appendChild(div);
-    scrollBottom();
+    var div = document.createElement('div'); div.className = 'msg bot typing'; div.id = 'typing-indicator';
+    div.innerHTML = '<div class="avatar">🚌</div><div class="bubble">识别中</div>';
+    messagesEl.appendChild(div); scrollBottom();
   }
+  function removeTyping() { var el = document.getElementById('typing-indicator'); if (el) el.remove(); }
 
-  function removeTyping() {
-    var el = document.getElementById('typing-indicator');
-    if (el) el.remove();
-  }
+  function autoGrow() { inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px'; }
 
-  function autoGrow() {
-    inputEl.style.height = 'auto';
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
-  }
-
-  async function send() {
-    if (isRecording) stopRecording();
-    var text = inputEl.value.trim();
-    if (!text || sending) return;
-    sending = true;
-    sendBtn.disabled = true;
-    inputEl.value = '';
-    autoGrow();
-    addMessage(text, 'user');
-    addTyping();
+  async function doChat(text) {
+    var typDiv = document.createElement('div'); typDiv.className = 'msg bot typing'; typDiv.id = 'chat-typing';
+    typDiv.innerHTML = '<div class="avatar">🚌</div><div class="bubble">查询中</div>';
+    messagesEl.appendChild(typDiv); scrollBottom();
 
     try {
       var controller = new AbortController();
       var timer = setTimeout(function() { controller.abort(); }, 90000);
       var resp = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sessionId, message: text }),
-        signal: controller.signal,
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionId, message: text }), signal: controller.signal,
       });
       clearTimeout(timer);
-      removeTyping();
-      if (!resp.ok) throw new Error('服务异常');
+      var ct = document.getElementById('chat-typing'); if (ct) ct.remove();
+      if (!resp.ok) throw new Error('fail');
       var data = await resp.json();
       addMessage(data.reply || '（无回复）', 'bot');
-    } catch (e) {
-      removeTyping();
-      if (e.name === 'AbortError') {
-        addMessage('请求超时，服务可能在启动中，请稍后再试一次', 'bot');
-      } else {
-        addMessage('网络异常，请稍后重试', 'bot');
-      }
-    } finally {
-      sending = false;
-      sendBtn.disabled = false;
-      inputEl.focus();
+    } catch(e) {
+      var ct2 = document.getElementById('chat-typing'); if (ct2) ct2.remove();
+      addMessage(e.name === 'AbortError' ? '请求超时，服务启动中，请再试一次' : '网络异常，请稍后重试', 'bot');
     }
   }
 
+  async function send() {
+    var text = inputEl.value.trim();
+    if (!text || sending) return;
+    sending = true; sendBtn.disabled = true;
+    inputEl.value = ''; autoGrow();
+    addMessage(text, 'user');
+    await doChat(text);
+    sending = false; sendBtn.disabled = false; inputEl.focus();
+  }
+
   sendBtn.addEventListener('click', send);
-  inputEl.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-  });
+  inputEl.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
   inputEl.addEventListener('input', autoGrow);
 
   addMessage('你好！我是粤程助手 🚌\n\n告诉我从哪到哪、哪天走，帮你找最合适的班次。\n\n例如："明天从深圳南山去广州天河"', 'bot');
-
   fetch('/api/health').catch(function(){});
 })();
 </script>
