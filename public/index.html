@@ -271,18 +271,26 @@
     addTyping();
 
     try {
+      var controller = new AbortController();
+      var timer = setTimeout(function() { controller.abort(); }, 90000);
       var resp = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: sessionId, message: text }),
+        signal: controller.signal,
       });
+      clearTimeout(timer);
       removeTyping();
       if (!resp.ok) throw new Error('服务异常');
       var data = await resp.json();
       addMessage(data.reply || '（无回复）', 'bot');
     } catch (e) {
       removeTyping();
-      addMessage('网络异常，请稍后重试', 'bot');
+      if (e.name === 'AbortError') {
+        addMessage('请求超时，服务可能在启动中，请稍后再试一次', 'bot');
+      } else {
+        addMessage('网络异常，请稍后重试', 'bot');
+      }
     } finally {
       sending = false;
       sendBtn.disabled = false;
@@ -297,6 +305,8 @@
   inputEl.addEventListener('input', autoGrow);
 
   addMessage('你好！我是粤程助手。\n\n告诉我你想从哪里到哪里，我来帮你找到最合适的城际巴士班次，还可以一键生成订票链接。\n\n例如："我想从广州去深圳" 或 "明天从珠海到佛山最便宜的班次"', 'bot');
+
+  fetch('/api/health').catch(function(){});
 })();
 </script>
 </body>

@@ -46,12 +46,20 @@ app.post("/api/chat", async (req, res) => {
   const messages = getOrCreateSession(sessionId);
   messages.push({ role: "user", content: message });
 
+  const timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      res.status(504).json({ error: "请求超时，请重试" });
+    }
+  }, 60000);
+
   try {
     const reply = await chat(messages);
-    res.json({ reply });
+    clearTimeout(timeout);
+    if (!res.headersSent) res.json({ reply });
   } catch (err) {
+    clearTimeout(timeout);
     console.error("Chat error:", err);
-    res.status(500).json({ error: "服务异常，请稍后重试" });
+    if (!res.headersSent) res.status(500).json({ error: "服务异常，请稍后重试" });
   }
 });
 
