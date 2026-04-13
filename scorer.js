@@ -27,15 +27,29 @@ function nowBeijing() {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
 }
 
+function beijingYmd() {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
+}
+
 function nowMinutes() {
   const n = nowBeijing();
   return n.getHours() * 60 + n.getMinutes();
 }
 
-function scoreTime(fromTimeStr, targetTime, timeMode) {
+/**
+ * @param {string} tripDate 查询出行日 YYYY-MM-DD（与工具 date 一致）。asap 模式依赖它区分「今天已过」与「未来日期」。
+ */
+function scoreTime(fromTimeStr, targetTime, timeMode, tripDate) {
   const from = timeToMinutes(fromTimeStr);
   const target = timeToMinutes(targetTime);
   if (timeMode === "asap") {
+    const today = beijingYmd();
+    if (tripDate && tripDate < today) return -1;
+    if (tripDate && tripDate > today) {
+      // 未来日期的「尽快」：按当天出发时刻越早分越高，勿与「今晚」的 now 比较
+      const dayEnd = 24 * 60;
+      return Math.max(0, 1 - from / dayEnd);
+    }
     const now = nowMinutes();
     if (from <= now) return -1;
     return Math.max(0, 1 - (from - now) / ASAP_WINDOW);
@@ -119,7 +133,7 @@ function scoreSeat(residue) {
 
 function scoreAndRank(opts) {
   const {
-    intervals, targetTime, timeMode,
+    intervals, targetTime, timeMode, tripDate,
     preferBoarding = [], preferDropoff = [],
     weights: customWeights, topN = 5,
   } = opts;
@@ -132,7 +146,7 @@ function scoreAndRank(opts) {
   for (const iv of intervals) {
     const seatS = scoreSeat(iv.residue);
     if (seatS < 0) { filteredSoldOut++; continue; }
-    const timeS = scoreTime(iv.from_time || iv.fromTime, targetTime, timeMode);
+    const timeS = scoreTime(iv.from_time || iv.fromTime, targetTime, timeMode, tripDate);
     if (timeS < 0) { filteredPastTime++; continue; }
     candidates.push({ iv, timeS, seatS });
   }

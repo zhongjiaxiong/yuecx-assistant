@@ -48,8 +48,7 @@ function buildSystemPrompt() {
 4. 用 score_and_rank 做推荐时，根据用户需求调整权重:
    - "最便宜" → price 权重调高
    - "最近的站" → station 权重调高
-   - "尽快出发" → timeMode=asap
-   - "赶几点到" → timeMode=arrive
+   - 时间模式: 用户说了具体出发钟点（如「明早八点」）→ timeMode=depart 且设置 targetTime；仅「尽快/下一班/不限几点」→ timeMode=asap；「赶几点前到」→ timeMode=arrive。有钟点时不要用 asap，否则在深夜查询次日早班时会被误判为「已过期」。
 5. 展示推荐结果 — 必须用 [ROUTE_RESULTS:JSON] 标记:
    - score_and_rank 返回的每个班次包含 matchedBoardingTime（上车站到站时间）和 boardingCandidates（候选上车站）。
    - ⚠ 展示时间必须用 matchedBoardingTime，不要用 interval.fromTime。
