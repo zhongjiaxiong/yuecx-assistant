@@ -22,6 +22,10 @@ services:
         sync: false  # 在 Dashboard 中设置
       - key: LLM_MODEL
         value: qwen-max
+      - key: JWT_SECRET
+        sync: false  # 在 Dashboard 中设置
+      - key: BAIDU_MAP_AK
+        sync: false  # 在 Dashboard 中设置（可选，不配则无自动定位）
       - key: NODE_ENV
         value: production
       - key: PORT
