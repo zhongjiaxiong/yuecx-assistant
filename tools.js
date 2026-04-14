@@ -175,8 +175,18 @@ async function searchIntervals({ date, startCity, endCity }) {
 }
 
 async function fetchYlxIntervals(startCityId, endCityId, date) {
-  const routeId = await db.getRouteId(startCityId, endCityId, "yuecx");
-  if (!routeId) return [];
+  let routeId = await db.getRouteId(startCityId, endCityId, "yuecx");
+
+  if (!routeId) {
+    try {
+      routeId = await db.upsertRoute(startCityId, endCityId, "yuecx");
+    } catch (_) {}
+  }
+
+  if (!routeId) {
+    const intervals = await crawlOnDemand(startCityId, endCityId, date);
+    return intervals.map((r) => ({ ...r, source: "yuecx" }));
+  }
 
   let cacheAge = await db.getCacheAge(routeId, date);
   if (cacheAge === null || cacheAge > CACHE_MAX_MINUTES) {
