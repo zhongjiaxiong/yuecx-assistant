@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "粤程助手",
+  "usingComponents": {
+    "route-card": "../../components/route-card/route-card",
+    "booking-card": "../../components/booking-card/booking-card"
+  }
+}

@@ -1,0 +1,94 @@
+<view class="chat-container">
+  <!-- 定位授权提示 -->
+  <view class="location-bar" wx:if="{{!locationGranted}}">
+    <text class="location-text">开启定位可自动推荐最近上车站</text>
+    <view class="location-btn" bindtap="requestLocation">开启定位</view>
+  </view>
+
+  <!-- 消息列表 -->
+  <scroll-view
+    class="message-list"
+    scroll-y
+    scroll-into-view="{{scrollTarget}}"
+    scroll-with-animation
+    enhanced
+    show-scrollbar="{{false}}"
+  >
+    <!-- 欢迎消息 -->
+    <view class="message assistant" wx:if="{{messages.length === 0}}">
+      <view class="avatar assistant-avatar">粤</view>
+      <view class="bubble">
+        <text>你好！我是粤程助手，帮你查广东城际大巴。\n\n试试说：\n· 明天去广州\n· 后天从深圳到佛山\n· 最近一班去东莞</text>
+      </view>
+    </view>
+
+    <block wx:for="{{messages}}" wx:key="id">
+      <view id="msg-{{item.id}}" class="message {{item.role}}">
+        <!-- 用户消息 -->
+        <block wx:if="{{item.role === 'user'}}">
+          <view class="bubble user-bubble">
+            <text>{{item.content}}</text>
+          </view>
+          <view class="avatar user-avatar">我</view>
+        </block>
+
+        <!-- 助手消息 -->
+        <block wx:elif="{{item.role === 'assistant'}}">
+          <view class="avatar assistant-avatar">粤</view>
+          <view class="bubble-wrap">
+            <block wx:for="{{item.segments}}" wx:for-item="seg" wx:key="segIdx" wx:for-index="segIdx">
+              <!-- 纯文本 -->
+              <view class="bubble" wx:if="{{seg.type === 'text'}}">
+                <text>{{seg.content}}</text>
+              </view>
+              <!-- 班次卡片 -->
+              <route-card
+                wx:elif="{{seg.type === 'route'}}"
+                data="{{seg.data}}"
+                bind:book="onQuickBook"
+              />
+              <!-- 订票卡片 -->
+              <booking-card
+                wx:elif="{{seg.type === 'booking'}}"
+                data="{{seg.data}}"
+              />
+            </block>
+          </view>
+        </block>
+      </view>
+    </block>
+
+    <!-- loading 态 -->
+    <view id="msg-loading" class="message assistant" wx:if="{{loading}}">
+      <view class="avatar assistant-avatar">粤</view>
+      <view class="bubble loading-bubble">
+        <view class="loading-dots">
+          <view class="dot"></view>
+          <view class="dot"></view>
+          <view class="dot"></view>
+        </view>
+        <text class="loading-text">{{loadingText}}</text>
+      </view>
+    </view>
+
+    <view id="scroll-bottom" style="height: 20rpx;"></view>
+  </scroll-view>
+
+  <!-- 输入区 -->
+  <view class="input-area">
+    <input
+      class="chat-input"
+      value="{{inputValue}}"
+      placeholder="说说你要去哪..."
+      confirm-type="send"
+      bindinput="onInput"
+      bindconfirm="onSend"
+      disabled="{{loading}}"
+      adjust-position="{{true}}"
+      cursor-spacing="20"
+    />
+    <view class="send-btn {{inputValue ? 'active' : ''}}" bindtap="onSend">
+      <text>发送</text>
+    </view>
+  </view>
+</view>

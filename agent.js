@@ -66,18 +66,12 @@ score_and_rank 用法:
 - 用户说了具体目的地（"天河体育中心""番禺万达"等）→ preferDropoff=["天河体育中心"]
 - 用户只说了区（"去天河"）→ preferDropoff=["天河"]
 
-展示结果 — 必须用 [ROUTE_RESULTS:JSON]:
-- score_and_rank 返回: matchedBoarding(最近上车站), matchedDropoff(最近下车站), boardingDistMeters(上车距离), dropoffDistMeters(下车距离)
-- ⚠ 时间用 matchedBoardingTime，不用 interval.fromTime
-- 格式: [ROUTE_RESULTS:{"startCity":"深圳","endCity":"广州","date":"2026-04-14","items":[{"time":"07:30","boarding":"深大地铁站","boardingDist":"1.2km","dropoff":"体育西路","dropoffDist":"0.8km","price":"33.00","seats":10}],"tip":"说「订第X班」下单 · 点📍查看上车站地图"}]
-- ⚠ 必须包含 startCity、endCity、date 顶层字段（前端地图用）
-- items: time, boarding(全名), boardingDist(可选), dropoff(全名), dropoffDist(可选), price(元), seats, warn(可选)
-- JSON 单行，前面可加文字如"为你找到以下班次："
-- 告知定位与距离，如"你在南山区，离你最近的上车站是深大地铁站（1.2km）"
-
-结果为空时:
-- 全部过时 → 建议看明天
-- 全部售罄 → 建议其他日期
+展示结果 — 系统已自动将 score_and_rank 的卡片推送给用户:
+- ⚠ 你不需要输出 [ROUTE_RESULTS:JSON]，系统已自动处理
+- ⚠ 你只需要用1-2句简短的话总结推荐，例如:"为你找到5个班次，离你最近的上车站是深大地铁站（约1.5km），最早07:05出发。"
+- 如有距离信息（boardingDistMeters/dropoffDistMeters），提及最近的上车站和下车站
+- 不要重复列出每个班次的详细信息，卡片里已经有了
+- 如果结果为空: 全部过时 → 建议看明天; 全部售罄 → 建议其他日期
 
 订票: 用户说"订第X班" → 调 book_interval → [BOOKING_CARD:JSON] 输出
 示例: [BOOKING_CARD:{"route":"深圳→广州","date":"2026-04-14","fromTime":"08:30","boardingTime":"08:45","boardingStation":"深大地铁站","dropoffStation":"体育西路","priceYuan":"50.00","residue":8}]
@@ -123,7 +117,40 @@ const TOOL_STEP_MAP = {
   list_cities: "searching",
 };
 
-async function chat(messages, userId, ctx, onProgress) {
+function fmtDist(meters) {
+  if (meters == null) return null;
+  return meters < 1000 ? `${meters}m` : `${(meters / 1000).toFixed(1)}km`;
+}
+
+function buildCardFromToolResult(parsed) {
+  const q = parsed.query || {};
+  const ri = parsed.routeInfo || {};
+  const items = (parsed.results || []).map((r) => {
+    const iv = r.interval || {};
+    const item = {
+      time: r.matchedBoardingTime || iv.fromTime || iv.from_time || "",
+      boarding: r.matchedBoarding || "",
+      dropoff: r.matchedDropoff || "",
+      price: iv.priceYuan || (iv.priceFen ? (iv.priceFen / 100).toFixed(2) : ""),
+      seats: iv.residue != null ? iv.residue : null,
+    };
+    const bd = fmtDist(r.boardingDistMeters);
+    if (bd) item.boardingDist = bd;
+    const dd = fmtDist(r.dropoffDistMeters);
+    if (dd) item.dropoffDist = dd;
+    if (iv.residue != null && iv.residue <= 3 && iv.residue > 0) item.warn = "余票紧张";
+    return item;
+  });
+  return {
+    startCity: ri.startCityName || q.startCity || "",
+    endCity: ri.endCityName || q.endCity || "",
+    date: q.date || "",
+    items,
+    tip: "说「订第X班」下单 · 点📍查看上车站地图",
+  };
+}
+
+async function chat(messages, userId, ctx, onProgress, onCardReady) {
   if (messages[0]?.role !== "system") {
     messages.unshift({ role: "system", content: buildSystemPrompt() });
   }
@@ -150,10 +177,19 @@ async function chat(messages, userId, ctx, onProgress) {
       const args = typeof tc.function.arguments === "string"
         ? JSON.parse(tc.function.arguments)
         : tc.function.arguments;
-      return { id: tc.id, content: await executeTool(tc.function.name, args, userId, ctx) };
+      return { id: tc.id, name: tc.function.name, content: await executeTool(tc.function.name, args, userId, ctx) };
     }));
+
     for (const tr of toolResults) {
       messages.push({ role: "tool", tool_call_id: tr.id, content: tr.content });
+      if (tr.name === "score_and_rank" && onCardReady) {
+        try {
+          const parsed = JSON.parse(tr.content);
+          if (parsed.success && parsed.results && parsed.results.length > 0) {
+            onCardReady(buildCardFromToolResult(parsed));
+          }
+        } catch (_) {}
+      }
     }
 
     if (onProgress) onProgress("thinking");

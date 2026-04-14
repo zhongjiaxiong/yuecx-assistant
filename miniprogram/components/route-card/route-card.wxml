@@ -1,0 +1,39 @@
+<view class="route-card">
+  <view class="card-header">
+    <text class="route-label">{{data.startCity}} → {{data.endCity}}</text>
+    <text class="route-date">{{data.date}}</text>
+  </view>
+
+  <view class="items">
+    <view class="item" wx:for="{{data.items}}" wx:key="index">
+      <view class="item-row main-row">
+        <view class="item-index">{{index + 1}}</view>
+        <view class="item-time">{{item.time}}</view>
+        <view class="item-price">¥{{item.price}}</view>
+        <view class="item-seats {{item.seats <= 3 ? 'seats-low' : ''}}">
+          余{{item.seats}}座
+        </view>
+      </view>
+      <view class="item-row station-row">
+        <view class="station">
+          <text class="station-icon">▲</text>
+          <text class="station-name">{{item.boarding}}</text>
+          <text class="station-dist" wx:if="{{item.boardingDist}}">{{item.boardingDist}}</text>
+        </view>
+        <view class="station">
+          <text class="station-icon">▼</text>
+          <text class="station-name">{{item.dropoff}}</text>
+          <text class="station-dist" wx:if="{{item.dropoffDist}}">{{item.dropoffDist}}</text>
+        </view>
+      </view>
+      <view class="item-warn" wx:if="{{item.warn}}">{{item.warn}}</view>
+      <view class="item-action">
+        <view class="book-btn" bindtap="onBook" data-index="{{index + 1}}">订第{{index + 1}}班</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="card-tip" wx:if="{{data.tip}}">
+    <text>{{data.tip}}</text>
+  </view>
+</view>

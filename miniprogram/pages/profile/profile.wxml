@@ -1,0 +1,65 @@
+<view class="profile-container">
+  <!-- 用户卡片 -->
+  <view class="user-card">
+    <view class="user-avatar">
+      <text class="avatar-text">{{phone ? phone[3] : '粤'}}</text>
+    </view>
+    <view class="user-info">
+      <block wx:if="{{phone}}">
+        <text class="user-phone">{{phoneMasked}}</text>
+        <text class="user-label">已登录</text>
+      </block>
+      <block wx:else>
+        <text class="user-name">粤程助手用户</text>
+        <text class="user-label">绑定手机号享受更好体验</text>
+      </block>
+    </view>
+  </view>
+
+  <!-- 登录按钮 -->
+  <view class="section" wx:if="{{!phone}}">
+    <button
+      class="phone-btn"
+      open-type="getPhoneNumber"
+      bindgetphonenumber="onGetPhoneNumber"
+    >
+      手机号快捷登录
+    </button>
+    <text class="phone-hint">授权手机号后可保存您的出行偏好</text>
+  </view>
+
+  <!-- 功能列表 -->
+  <view class="section menu-section">
+    <view class="menu-item" bindtap="onGoChat">
+      <text class="menu-icon">💬</text>
+      <text class="menu-text">开始咨询</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="onOpenYuecx">
+      <text class="menu-icon">🚌</text>
+      <text class="menu-text">打开粤出行</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="onSetServer" wx:if="{{isDev}}">
+      <text class="menu-icon">⚙️</text>
+      <text class="menu-text">服务器地址</text>
+      <text class="menu-arrow">›</text>
+    </view>
+  </view>
+
+  <!-- 关于 -->
+  <view class="section about-section">
+    <view class="about-row">
+      <text class="about-label">版本</text>
+      <text class="about-value">1.0.0</text>
+    </view>
+    <view class="about-row">
+      <text class="about-desc">粤程助手 — AI 帮你选最优城际大巴班次</text>
+    </view>
+  </view>
+
+  <!-- 退出登录 -->
+  <view class="section" wx:if="{{phone}}">
+    <view class="logout-btn" bindtap="onLogout">退出登录</view>
+  </view>
+</view>

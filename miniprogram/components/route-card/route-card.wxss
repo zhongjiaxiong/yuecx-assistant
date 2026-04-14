@@ -1,0 +1,152 @@
+.route-card {
+  background: #fff;
+  border-radius: 16rpx;
+  margin: 12rpx 0;
+  overflow: hidden;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  background: linear-gradient(135deg, #1677ff 0%, #4096ff 100%);
+  color: #fff;
+}
+
+.route-label {
+  font-size: 30rpx;
+  font-weight: 600;
+}
+
+.route-date {
+  font-size: 24rpx;
+  opacity: 0.85;
+}
+
+.items {
+  padding: 0 24rpx;
+}
+
+.item {
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.item-row {
+  display: flex;
+  align-items: center;
+}
+
+.main-row {
+  margin-bottom: 12rpx;
+}
+
+.item-index {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: #f0f5ff;
+  color: #1677ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  font-weight: 600;
+  margin-right: 16rpx;
+  flex-shrink: 0;
+}
+
+.item-time {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+  flex: 1;
+}
+
+.item-price {
+  font-size: 30rpx;
+  color: #ff4d4f;
+  font-weight: 600;
+  margin-right: 16rpx;
+}
+
+.item-seats {
+  font-size: 22rpx;
+  color: #52c41a;
+  background: #f6ffed;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+}
+
+.seats-low {
+  color: #ff4d4f;
+  background: #fff2f0;
+}
+
+.station-row {
+  flex-direction: column;
+  align-items: flex-start;
+  padding-left: 60rpx;
+  gap: 8rpx;
+}
+
+.station {
+  display: flex;
+  align-items: center;
+  font-size: 24rpx;
+  color: #666;
+}
+
+.station-icon {
+  font-size: 18rpx;
+  margin-right: 8rpx;
+  color: #999;
+}
+
+.station-name {
+  margin-right: 8rpx;
+}
+
+.station-dist {
+  font-size: 22rpx;
+  color: #1677ff;
+  background: #f0f5ff;
+  padding: 2rpx 8rpx;
+  border-radius: 4rpx;
+}
+
+.item-warn {
+  padding-left: 60rpx;
+  font-size: 22rpx;
+  color: #faad14;
+  margin-top: 8rpx;
+}
+
+.item-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12rpx;
+}
+
+.book-btn {
+  font-size: 24rpx;
+  color: #1677ff;
+  background: #f0f5ff;
+  padding: 8rpx 24rpx;
+  border-radius: 20rpx;
+  border: 1rpx solid #1677ff;
+}
+
+.card-tip {
+  padding: 16rpx 24rpx;
+  font-size: 22rpx;
+  color: #999;
+  background: #fafafa;
+  border-top: 1rpx solid #f0f0f0;
+}

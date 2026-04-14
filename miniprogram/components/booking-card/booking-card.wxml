@@ -1,0 +1,45 @@
+<view class="booking-card">
+  <view class="card-title">
+    <text class="title-icon">🎫</text>
+    <text>订票确认</text>
+  </view>
+
+  <view class="info-grid">
+    <view class="info-item">
+      <text class="info-label">路线</text>
+      <text class="info-value">{{data.route}}</text>
+    </view>
+    <view class="info-item">
+      <text class="info-label">日期</text>
+      <text class="info-value">{{data.date}}</text>
+    </view>
+    <view class="info-item">
+      <text class="info-label">发车</text>
+      <text class="info-value">{{data.fromTime}}</text>
+    </view>
+    <view class="info-item" wx:if="{{data.boardingTime && data.boardingTime !== data.fromTime}}">
+      <text class="info-label">上车时间</text>
+      <text class="info-value">{{data.boardingTime}}</text>
+    </view>
+    <view class="info-item">
+      <text class="info-label">上车站</text>
+      <text class="info-value highlight">{{data.boardingStation}}</text>
+    </view>
+    <view class="info-item">
+      <text class="info-label">下车站</text>
+      <text class="info-value">{{data.dropoffStation}}</text>
+    </view>
+    <view class="info-item">
+      <text class="info-label">票价</text>
+      <text class="info-value price">¥{{data.priceYuan}}</text>
+    </view>
+    <view class="info-item" wx:if="{{data.residue}}">
+      <text class="info-label">余票</text>
+      <text class="info-value">{{data.residue}}张</text>
+    </view>
+  </view>
+
+  <view class="action-area">
+    <view class="buy-btn" bindtap="onBuy">去粤出行购票</view>
+  </view>
+</view>

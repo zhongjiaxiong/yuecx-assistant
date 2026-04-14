@@ -1,17 +1,20 @@
 /**
  * 粤程助手 — Express API 服务
- * POST /api/chat             — 对话接口
- * POST /api/stt              — 语音转文字
- * POST /api/nearby-stations  — 地图定位推荐上车站
- * POST /api/cron/crawl       — 手动触发广深爬虫
- * GET  /                     — 聊天页面
- * GET  /api/health           — 健康检查
+ * POST /api/wx-login          — 微信小程序登录
+ * POST /api/wx-bindphone      — 绑定手机号
+ * POST /api/chat              — 对话接口
+ * POST /api/stt               — 语音转文字
+ * POST /api/nearby-stations   — 地图定位推荐上车站
+ * POST /api/cron/crawl        — 手动触发广深爬虫
+ * GET  /                      — 聊天页面
+ * GET  /api/health            — 健康检查
  */
 
 require("dotenv/config");
 const express = require("express");
 const path = require("path");
 const multer = require("multer");
+const jwt = require("jsonwebtoken");
 const { chat, buildSystemPrompt } = require("./agent");
 const { crawlHotRoutes, crawlOnDemand } = require("./crawler");
 const gaodeMap = require("./gaode-map");
@@ -21,10 +24,97 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 
 
 const LLM_BASE_URL = process.env.LLM_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1";
 const LLM_API_KEY = process.env.LLM_API_KEY || "";
+const JWT_SECRET = process.env.JWT_SECRET || "yuecheng-dev-secret-change-me";
+const WX_MP_APPID = process.env.WX_MP_APPID || "";
+const WX_MP_SECRET = process.env.WX_MP_SECRET || "";
 
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
+
+// ── JWT 中间件 ─────────────────────────────────────────────────
+
+function parseJwt(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) return null;
+  try {
+    return jwt.verify(authHeader.slice(7), JWT_SECRET);
+  } catch {
+    return null;
+  }
+}
+
+// ── 微信登录 ───────────────────────────────────────────────────
+
+app.post("/api/wx-login", async (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ error: "缺少 code" });
+
+  if (!WX_MP_APPID || !WX_MP_SECRET) {
+    const devOpenid = "dev_" + code.slice(0, 8);
+    const token = jwt.sign({ openid: devOpenid }, JWT_SECRET, { expiresIn: "7d" });
+    return res.json({ token, openid: devOpenid, dev: true });
+  }
+
+  try {
+    const url = `https://api.weixin.qq.com/sns/jscode2session?appid=${WX_MP_APPID}&secret=${WX_MP_SECRET}&js_code=${code}&grant_type=authorization_code`;
+    const wxRes = await fetch(url);
+    const wxData = await wxRes.json();
+
+    if (wxData.errcode) {
+      console.error("[wx-login] code2session error:", wxData);
+      return res.status(400).json({ error: wxData.errmsg || "微信登录失败" });
+    }
+
+    const { openid, session_key } = wxData;
+    const token = jwt.sign({ openid, sk: session_key }, JWT_SECRET, { expiresIn: "7d" });
+    res.json({ token, openid });
+  } catch (err) {
+    console.error("[wx-login] error:", err.message);
+    res.status(500).json({ error: "登录服务异常" });
+  }
+});
+
+// ── 绑定手机号 ─────────────────────────────────────────────────
+
+app.post("/api/wx-bindphone", async (req, res) => {
+  const { code } = req.body;
+  const payload = parseJwt(req);
+  if (!payload) return res.status(401).json({ error: "未登录" });
+  if (!code) return res.status(400).json({ error: "缺少 code" });
+
+  if (!WX_MP_APPID || !WX_MP_SECRET) {
+    return res.json({ phone: "13800000000", dev: true });
+  }
+
+  try {
+    const tokenUrl = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${WX_MP_APPID}&secret=${WX_MP_SECRET}`;
+    const tokenRes = await fetch(tokenUrl);
+    const tokenData = await tokenRes.json();
+    if (!tokenData.access_token) {
+      return res.status(500).json({ error: "获取 access_token 失败" });
+    }
+
+    const phoneUrl = `https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token=${tokenData.access_token}`;
+    const phoneRes = await fetch(phoneUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const phoneData = await phoneRes.json();
+
+    if (phoneData.errcode) {
+      console.error("[wx-bindphone] error:", phoneData);
+      return res.status(400).json({ error: phoneData.errmsg || "获取手机号失败" });
+    }
+
+    const phone = phoneData.phone_info?.phoneNumber || "";
+    res.json({ phone, openid: payload.openid });
+  } catch (err) {
+    console.error("[wx-bindphone] error:", err.message);
+    res.status(500).json({ error: "服务异常" });
+  }
+});
 
 // sessionId → messages[]
 const sessions = new Map();
@@ -51,11 +141,13 @@ setInterval(() => {
 // ── 对话 ──────────────────────────────────────────────────────
 
 app.post("/api/chat", async (req, res) => {
-  const { sessionId, message, location } = req.body;
-  if (!sessionId || !message) {
-    return res.status(400).json({ error: "sessionId 和 message 必填" });
+  const { sessionId: rawSessionId, message, location } = req.body;
+  if (!message) {
+    return res.status(400).json({ error: "message 必填" });
   }
 
+  const payload = parseJwt(req);
+  const sessionId = payload?.openid || rawSessionId || ("anon_" + Date.now());
   const session = getOrCreateSession(sessionId);
 
   if (location && location.latitude && location.longitude) {
@@ -95,19 +187,35 @@ app.post("/api/chat", async (req, res) => {
     }, 90000);
 
     let lastStep = "";
+    let cardSent = false;
     const onProgress = (step) => {
       if (step !== lastStep && !res.writableEnded) {
         lastStep = step;
         res.write(`data: ${JSON.stringify({ type: "progress", step })}\n\n`);
       }
     };
+    const onCardReady = (cardData) => {
+      if (!res.writableEnded) {
+        cardSent = true;
+        res.write(`data: ${JSON.stringify({ type: "card", data: cardData })}\n\n`);
+        res.write(`data: ${JSON.stringify({ type: "progress", step: "done" })}\n\n`);
+      }
+    };
 
     try {
       const ctx = { location: session.location };
-      const reply = await chat(session.messages, null, ctx, onProgress);
+      const reply = await chat(session.messages, null, ctx, onProgress, onCardReady);
       clearTimeout(timeout);
       if (!res.writableEnded) {
-        res.write(`data: ${JSON.stringify({ type: "done", reply })}\n\n`);
+        if (cardSent) {
+          const cleaned = (reply || "").replace(/\[ROUTE_RESULTS:[^\]]*\]/g, "").trim();
+          if (cleaned) {
+            res.write(`data: ${JSON.stringify({ type: "supplement", text: cleaned })}\n\n`);
+          }
+          res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ type: "done", reply })}\n\n`);
+        }
         res.end();
       }
     } catch (err) {
@@ -315,6 +423,8 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API endpoints:`);
+  console.log(`  - POST /api/wx-login         微信小程序登录`);
+  console.log(`  - POST /api/wx-bindphone     绑定手机号`);
   console.log(`  - POST /api/chat             对话接口`);
   console.log(`  - POST /api/stt              语音转文字`);
   console.log(`  - POST /api/nearby-stations  地图定位推荐上车站`);

@@ -726,6 +726,7 @@
       var buf = '';
       var finalReply = '';
       var gotDone = false;
+      var gotCard = false;
 
       while (true) {
         var chunk = await reader.read();
@@ -740,13 +741,24 @@
             var evt = JSON.parse(line.slice(6));
             if (evt.type === 'progress') {
               updateTypingStep(evt.step);
+            } else if (evt.type === 'card') {
+              gotCard = true;
+              var ct0 = document.getElementById('chat-typing'); if (ct0) ct0.remove();
+              var cardDiv = document.createElement('div'); cardDiv.className = 'msg bot';
+              var cardAvatar = document.createElement('div'); cardAvatar.className = 'avatar'; cardAvatar.textContent = '🚌';
+              var cardBubble = document.createElement('div'); cardBubble.className = 'bubble';
+              cardBubble.appendChild(buildRouteResults(evt.data));
+              cardDiv.appendChild(cardAvatar); cardDiv.appendChild(cardBubble);
+              messagesEl.appendChild(cardDiv); scrollBottom();
+            } else if (evt.type === 'supplement') {
+              if (evt.text) addMessage(evt.text, 'bot');
             } else if (evt.type === 'done') {
-              finalReply = evt.reply || '';
+              if (!gotCard && evt.reply) {
+                finalReply = evt.reply;
+              }
               gotDone = true;
             } else if (evt.type === 'error') {
-              finalReply = '';
-              gotDone = true;
-              var ct0 = document.getElementById('chat-typing'); if (ct0) ct0.remove();
+              var cte = document.getElementById('chat-typing'); if (cte) cte.remove();
               addMessage(evt.error || '服务异常', 'bot');
               return;
             }
@@ -755,9 +767,9 @@
       }
 
       var ct = document.getElementById('chat-typing'); if (ct) ct.remove();
-      if (gotDone) {
-        addMessage(finalReply || '（无回复）', 'bot');
-      } else {
+      if (!gotCard && gotDone && finalReply) {
+        addMessage(finalReply, 'bot');
+      } else if (!gotCard && !gotDone) {
         addMessage('（无回复）', 'bot');
       }
     } catch(e) {
