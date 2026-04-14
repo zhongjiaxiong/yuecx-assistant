@@ -225,16 +225,14 @@
     text-align: center; padding: 40px; color: #999;
   }
 
-  /* Header with loc button */
-  header { position: relative; }
+  /* Location button in input bar */
   #loc-btn {
-    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-    width: 32px; height: 32px; border: none; border-radius: 50%;
-    background: rgba(255,255,255,0.2); cursor: pointer;
+    flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%;
+    background: transparent; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
   }
-  #loc-btn svg { width: 20px; height: 20px; fill: #fff; }
-  #loc-btn.active { background: rgba(255,255,255,0.4); }
+  #loc-btn svg { width: 22px; height: 22px; fill: #999; }
+  #loc-btn.active svg { fill: var(--green); }
 
   /* Map Overlay */
   #map-overlay {
@@ -287,12 +285,7 @@
 </head>
 <body>
 <div id="app">
-  <header>
-    粤程助手 · 聚合比价
-    <button id="loc-btn" title="定位推荐上车点">
-      <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
-    </button>
-  </header>
+  <header>粤程助手 · 聚合比价</header>
 
   <!-- Tab Navigation -->
   <div id="nav-tabs">
@@ -309,6 +302,9 @@
     <button class="ib-toggle" id="mode-toggle" title="切换语音/文字">
       <svg id="icon-mic" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.93V20H8v2h8v-2h-3v-2.07A7 7 0 0019 11h-2z"/></svg>
       <svg id="icon-kbd" style="display:none" viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 12H4V7h16v10zM6 10h2v2H6v-2zm0 4h8v2H6v-2zm10 0h2v2h-2v-2zm0-4h2v2h-2v-2zm-4 0h2v2h-2v-2z"/></svg>
+    </button>
+    <button id="loc-btn" title="定位推荐上车点">
+      <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
     </button>
     <textarea id="input" rows="1" placeholder="输入你的问题..." enterkeyhint="send"></textarea>
     <button id="voice-btn">按住 说话</button>
