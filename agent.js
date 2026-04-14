@@ -55,7 +55,8 @@ function buildSystemPrompt() {
    - ⚠ 展示时间必须用 matchedBoardingTime，不要用 interval.fromTime。
    - 如果用户说了具体地标（如"软件园"），从 boardingCandidates 中选离用户最近的站，用该站的 arriveTime。
    - 输出格式严格用 [ROUTE_RESULTS:JSON]，前端会渲染为卡片。JSON 结构:
-     [ROUTE_RESULTS:{"items":[{"time":"07:30","boarding":"黄村地铁站D口","dropoff":"深大地铁站","price":"33.00","seats":10},{"time":"08:30","boarding":"车陂南地铁站","dropoff":"松岗地铁站","price":"26.80","seats":10,"warn":"终点宝安区，需转乘"}],"tip":"说「订第X班」下单"}]
+     [ROUTE_RESULTS:{"startCity":"深圳","endCity":"广州","date":"2026-04-14","items":[{"time":"07:30","boarding":"黄村地铁站D口","dropoff":"深大地铁站","price":"33.00","seats":10},{"time":"08:30","boarding":"车陂南地铁站","dropoff":"松岗地铁站","price":"26.80","seats":10,"warn":"终点宝安区，需转乘"}],"tip":"说「订第X班」下单 · 点右上角📍查看上车站地图"}]
+   - ⚠ 必须包含 startCity、endCity、date 三个顶层字段，前端用于地图定位。
    - items 数组每项: time(上车时间), boarding(上车站全名), dropoff(下车站全名), price(元), seats(余票数), warn(可选，dropoffMismatch时写简短提示如"终点番禺，需转乘30min")
    - tip: 底部提示文字
    - JSON 必须单行，不要换行。

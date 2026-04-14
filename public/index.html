@@ -224,11 +224,75 @@
   .loading-orders {
     text-align: center; padding: 40px; color: #999;
   }
+
+  /* Header with loc button */
+  header { position: relative; }
+  #loc-btn {
+    position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+    width: 32px; height: 32px; border: none; border-radius: 50%;
+    background: rgba(255,255,255,0.2); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #loc-btn svg { width: 20px; height: 20px; fill: #fff; }
+  #loc-btn.active { background: rgba(255,255,255,0.4); }
+
+  /* Map Overlay */
+  #map-overlay {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: #fff; flex-direction: column;
+  }
+  #map-overlay.open { display: flex; }
+  .map-header {
+    flex-shrink: 0; display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--green); color: #fff;
+  }
+  .map-header-title { font-size: 16px; font-weight: 600; }
+  .map-close {
+    width: 32px; height: 32px; border: none; border-radius: 50%;
+    background: rgba(255,255,255,0.2); color: #fff; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #map-container { flex: 1; }
+  .map-stations {
+    flex-shrink: 0; max-height: 40vh; overflow-y: auto; background: #fff;
+    border-top: 1px solid var(--border);
+  }
+  .map-st-item {
+    display: flex; align-items: center; padding: 12px 16px; gap: 12px;
+    border-bottom: 1px solid #f5f5f5; cursor: pointer;
+  }
+  .map-st-item:active { background: #f9f9f9; }
+  .map-st-rank {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--green);
+    color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .map-st-info { flex: 1; min-width: 0; }
+  .map-st-name { font-size: 14px; font-weight: 600; color: #333; }
+  .map-st-meta { font-size: 12px; color: #999; margin-top: 2px; }
+  .map-st-dist {
+    font-size: 13px; font-weight: 600; color: var(--green); flex-shrink: 0; white-space: nowrap;
+  }
+  .map-st-select {
+    padding: 5px 12px; border: 1px solid var(--green); border-radius: 14px;
+    background: #fff; color: var(--green); font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+  }
+  .map-st-select:active { background: var(--green); color: #fff; }
+  .map-loading { text-align: center; padding: 30px; color: #999; font-size: 14px; }
+  .map-empty { text-align: center; padding: 30px; color: #999; }
+  .map-loc-hint {
+    padding: 8px 16px; background: #fffbe6; font-size: 12px; color: #ad8b00; text-align: center;
+  }
 </style>
 </head>
 <body>
 <div id="app">
-  <header>粤程助手 · 聚合比价</header>
+  <header>
+    粤程助手 · 聚合比价
+    <button id="loc-btn" title="定位推荐上车点">
+      <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 010-5 2.5 2.5 0 010 5z"/></svg>
+    </button>
+  </header>
 
   <!-- Tab Navigation -->
   <div id="nav-tabs">
@@ -268,6 +332,17 @@
     <div class="order-list" id="order-list">
       <div class="loading-orders">点击「我的订单」标签加载</div>
     </div>
+  </div>
+</div>
+
+<div id="map-overlay">
+  <div class="map-header">
+    <span class="map-header-title">📍 附近上车站</span>
+    <button class="map-close" id="map-close">✕</button>
+  </div>
+  <div id="map-container"></div>
+  <div class="map-stations" id="map-stations">
+    <div class="map-loading">获取定位中...</div>
   </div>
 </div>
 
@@ -461,6 +536,10 @@
   }
 
   function buildRouteResults(data) {
+    if (data.startCity && data.endCity && data.date) {
+      lastRouteContext = { startCity: data.startCity, endCity: data.endCity, date: data.date };
+      locBtn.classList.add('active');
+    }
     var items = data.items || data;
     if (!Array.isArray(items)) return document.createTextNode('');
     var wrap = document.createElement('div'); wrap.className = 'rr-wrap';
@@ -577,6 +656,187 @@
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 300000 }
     );
   }
+
+  // ── 地图定位推荐上车站 ──────────────────────────────────────
+  var lastRouteContext = null;
+  var mapBaiduAK = null;
+  var bMapLoaded = false;
+  var mapOverlay = document.getElementById('map-overlay');
+  var mapContainer = document.getElementById('map-container');
+  var mapStations = document.getElementById('map-stations');
+  var locBtn = document.getElementById('loc-btn');
+  var mapCloseBtn = document.getElementById('map-close');
+
+  fetch('/api/map-config').then(function(r){return r.json()}).then(function(d){ mapBaiduAK = d.ak; }).catch(function(){});
+
+  function loadBaiduMapSDK(cb) {
+    if (bMapLoaded && window.BMapGL) { cb(); return; }
+    if (!mapBaiduAK) { alert('地图服务未配置'); return; }
+    window._bMapCallback = function() { bMapLoaded = true; cb(); };
+    var s = document.createElement('script');
+    s.src = 'https://api.map.baidu.com/api?v=1.0&type=webgl&ak=' + mapBaiduAK + '&callback=_bMapCallback';
+    document.head.appendChild(s);
+  }
+
+  function setLastRouteContext(items) {
+    if (!items || !items.length) return;
+    var first = items[0];
+    if (first._startCity && first._endCity && first._date) {
+      lastRouteContext = { startCity: first._startCity, endCity: first._endCity, date: first._date };
+    }
+  }
+
+  function formatDist(m) {
+    if (m == null) return '';
+    return m < 1000 ? m + 'm' : (m / 1000).toFixed(1) + 'km';
+  }
+
+  function openMap() {
+    if (!userLocation) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function(pos) {
+            userLocation = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+            doOpenMap();
+          },
+          function() { alert('无法获取定位，请在浏览器设置中允许位置权限'); },
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      } else {
+        alert('当前浏览器不支持定位');
+      }
+      return;
+    }
+    doOpenMap();
+  }
+
+  function doOpenMap() {
+    mapOverlay.classList.add('open');
+    mapStations.innerHTML = '<div class="map-loading">正在查询附近上车站...</div>';
+
+    if (!lastRouteContext) {
+      mapStations.innerHTML = '<div class="map-empty">请先通过对话查询班次，再查看附近上车站</div>';
+      loadBaiduMapSDK(function() { showSimpleMap(); });
+      return;
+    }
+
+    var reqBody = {
+      latitude: userLocation.latitude,
+      longitude: userLocation.longitude,
+      startCity: lastRouteContext.startCity,
+      endCity: lastRouteContext.endCity,
+      date: lastRouteContext.date,
+    };
+
+    fetch('/api/nearby-stations', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reqBody),
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (!data.success || !data.data || !data.data.stations.length) {
+        mapStations.innerHTML = '<div class="map-empty">暂无上车站数据</div>';
+        loadBaiduMapSDK(function() { showSimpleMap(); });
+        return;
+      }
+      var stations = data.data.stations;
+      loadBaiduMapSDK(function() { renderMap(stations, data.data.userAddress); });
+    })
+    .catch(function() {
+      mapStations.innerHTML = '<div class="map-empty">查询失败，请稍后再试</div>';
+      loadBaiduMapSDK(function() { showSimpleMap(); });
+    });
+  }
+
+  function showSimpleMap() {
+    if (!window.BMapGL) return;
+    var map = new BMapGL.Map(mapContainer);
+    var point = new BMapGL.Point(userLocation.longitude, userLocation.latitude);
+    map.centerAndZoom(point, 14);
+    map.enableScrollWheelZoom(true);
+    var coordsys = new BMapGL.Convertor();
+    var pArr = [point];
+    coordsys.translate(pArr, 1, 5, function(data) {
+      if (data.status === 0) {
+        map.centerAndZoom(data.points[0], 14);
+        var marker = new BMapGL.Marker(data.points[0]);
+        map.addOverlay(marker);
+        var label = new BMapGL.Label('我的位置', { offset: new BMapGL.Size(10, -20) });
+        label.setStyle({ color: '#fff', background: '#07c160', border: 'none', borderRadius: '4px', padding: '2px 8px', fontSize: '12px' });
+        marker.setLabel(label);
+      }
+    });
+  }
+
+  function renderMap(stations, userAddr) {
+    if (!window.BMapGL) return;
+    var map = new BMapGL.Map(mapContainer);
+    map.enableScrollWheelZoom(true);
+
+    var userPoint = new BMapGL.Point(userLocation.longitude, userLocation.latitude);
+    var allPoints = [userPoint];
+    var stWithCoords = [];
+
+    stations.forEach(function(st) {
+      if (st.lat && st.lng) {
+        allPoints.push(new BMapGL.Point(st.lng, st.lat));
+        stWithCoords.push(st);
+      }
+    });
+
+    var coordsys = new BMapGL.Convertor();
+    coordsys.translate(allPoints, 1, 5, function(data) {
+      if (data.status !== 0) return;
+      var pts = data.points;
+      map.centerAndZoom(pts[0], 13);
+
+      var userMarker = new BMapGL.Marker(pts[0], {
+        icon: new BMapGL.Icon('data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="10" fill="%2307c160" stroke="%23fff" stroke-width="3"/><circle cx="14" cy="14" r="4" fill="%23fff"/></svg>'), new BMapGL.Size(28, 28))
+      });
+      map.addOverlay(userMarker);
+      var userLabel = new BMapGL.Label(userAddr ? userAddr.formatted : '我的位置', { offset: new BMapGL.Size(14, -24) });
+      userLabel.setStyle({ color: '#fff', background: '#07c160', border: 'none', borderRadius: '4px', padding: '2px 8px', fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' });
+      userMarker.setLabel(userLabel);
+
+      stWithCoords.forEach(function(st, i) {
+        var pt = pts[i + 1];
+        var mk = new BMapGL.Marker(pt);
+        map.addOverlay(mk);
+        var lb = new BMapGL.Label((i + 1) + '. ' + st.name, { offset: new BMapGL.Size(10, -20) });
+        lb.setStyle({ color: '#333', background: '#fff', border: '1px solid #ddd', borderRadius: '4px', padding: '2px 8px', fontSize: '11px', whiteSpace: 'nowrap' });
+        mk.setLabel(lb);
+      });
+
+      if (pts.length > 1) {
+        map.setViewport(pts, { margins: [40, 40, 40, 40] });
+      }
+    });
+
+    var html = '';
+    if (userAddr) html += '<div class="map-loc-hint">📍 当前位置: ' + esc(userAddr.formatted || '') + '</div>';
+    stations.forEach(function(st, idx) {
+      html += '<div class="map-st-item" data-name="' + esc(st.name) + '">' +
+        '<div class="map-st-rank">' + (idx + 1) + '</div>' +
+        '<div class="map-st-info"><div class="map-st-name">' + esc(st.name) + '</div>' +
+        '<div class="map-st-meta">' + st.intervalCount + '个班次' + (st.timeRange ? ' · ' + esc(st.timeRange) : '') + '</div></div>' +
+        (st.distanceMeters != null ? '<div class="map-st-dist">' + formatDist(st.distanceMeters) + '</div>' : '') +
+        '<button class="map-st-select">选择</button>' +
+        '</div>';
+    });
+    mapStations.innerHTML = html;
+
+    mapStations.querySelectorAll('.map-st-select').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var name = btn.closest('.map-st-item').dataset.name;
+        mapOverlay.classList.remove('open');
+        inputEl.value = '我选择从' + name + '上车';
+        send();
+      });
+    });
+  }
+
+  locBtn.addEventListener('click', openMap);
+  mapCloseBtn.addEventListener('click', function() { mapOverlay.classList.remove('open'); });
 
   addMessage('你好！我是粤程助手 🚌\n\n告诉我从哪到哪、哪天走，帮你找最合适的班次。\n\n例如："明天从深圳南山去广州天河"', 'bot');
   fetch('/api/health').catch(function(){});

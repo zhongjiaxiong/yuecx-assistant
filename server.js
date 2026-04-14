@@ -1,10 +1,12 @@
 /**
  * 粤程助手 — Express API 服务
- * POST /api/chat      — 对话接口
- * POST /api/stt       — 语音转文字
- * POST /api/cron/crawl — 手动触发广深爬虫
- * GET  /              — 聊天页面
- * GET  /api/health    — 健康检查
+ * POST /api/chat             — 对话接口
+ * POST /api/stt              — 语音转文字
+ * POST /api/nearby-stations  — 地图定位推荐上车站
+ * GET  /api/map-config       — 百度地图 AK
+ * POST /api/cron/crawl       — 手动触发广深爬虫
+ * GET  /                     — 聊天页面
+ * GET  /api/health           — 健康检查
  */
 
 require("dotenv/config");
@@ -12,7 +14,9 @@ const express = require("express");
 const path = require("path");
 const multer = require("multer");
 const { chat, buildSystemPrompt } = require("./agent");
-const { crawlHotRoutes } = require("./crawler");
+const { crawlHotRoutes, crawlOnDemand } = require("./crawler");
+const baiduMap = require("./baidu-map");
+const db = require("./db");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -132,6 +136,127 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+// ── 附近上车站（地图定位推荐）─────────────────────────────────
+
+app.post("/api/nearby-stations", async (req, res) => {
+  const { latitude, longitude, startCity, endCity, date } = req.body;
+  if (!latitude || !longitude || !startCity || !endCity || !date) {
+    return res.status(400).json({ error: "缺少参数: latitude, longitude, startCity, endCity, date" });
+  }
+
+  try {
+    const startRows = await db.findCityByName(startCity);
+    const endRows = await db.findCityByName(endCity);
+    if (!startRows.length || !endRows.length) {
+      return res.json({ success: false, error: "城市未找到" });
+    }
+
+    const startCityId = startRows[0].city_id;
+    const endCityId = endRows[0].city_id;
+    const routeId = await db.getRouteId(startCityId, endCityId);
+
+    let intervals = routeId ? await db.queryIntervals(routeId, date) : [];
+    if (intervals.length === 0) {
+      intervals = await crawlOnDemand(startCityId, endCityId, date);
+    }
+
+    const stationMap = new Map();
+    for (const iv of intervals) {
+      for (const st of iv.boarding_stations || []) {
+        if (!stationMap.has(st.name)) {
+          stationMap.set(st.name, {
+            name: st.name, adcode: st.adcode || "",
+            intervalCount: 0, times: [],
+          });
+        }
+        const entry = stationMap.get(st.name);
+        entry.intervalCount++;
+        if (st.arriveTime) entry.times.push(st.arriveTime);
+      }
+    }
+
+    const stations = Array.from(stationMap.values());
+    if (stations.length === 0) {
+      return res.json({ success: true, data: { stations: [], userAddress: null } });
+    }
+
+    let userAddress = null;
+    const stationsOut = [];
+
+    if (baiduMap.isConfigured()) {
+      try {
+        const geo = await baiduMap.reverseGeocode(latitude, longitude);
+        userAddress = { formatted: geo.formatted, district: geo.district };
+
+        for (const st of stations) {
+          const pois = await baiduMap.searchNearby(st.name, latitude, longitude, 50000);
+          const match = pois.find((p) => p.name.includes(st.name) || st.name.includes(p.name));
+          const distMeters = match
+            ? baiduMap.haversineMeters(latitude, longitude, match.lat, match.lng)
+            : null;
+
+          stationsOut.push({
+            name: st.name,
+            lat: match?.lat || null,
+            lng: match?.lng || null,
+            distanceMeters: distMeters ? Math.round(distMeters) : null,
+            intervalCount: st.intervalCount,
+            timeRange: st.times.length
+              ? `${st.times.sort()[0]}~${st.times.sort().slice(-1)[0]}`
+              : "",
+          });
+        }
+      } catch (err) {
+        console.error("[nearby-stations] baidu map error:", err.message);
+        for (const st of stations) {
+          stationsOut.push({
+            name: st.name, lat: null, lng: null, distanceMeters: null,
+            intervalCount: st.intervalCount,
+            timeRange: st.times.length
+              ? `${st.times.sort()[0]}~${st.times.sort().slice(-1)[0]}`
+              : "",
+          });
+        }
+      }
+    } else {
+      for (const st of stations) {
+        stationsOut.push({
+          name: st.name, lat: null, lng: null, distanceMeters: null,
+          intervalCount: st.intervalCount,
+          timeRange: st.times.length
+            ? `${st.times.sort()[0]}~${st.times.sort().slice(-1)[0]}`
+            : "",
+        });
+      }
+    }
+
+    stationsOut.sort((a, b) => {
+      if (a.distanceMeters == null && b.distanceMeters == null) return 0;
+      if (a.distanceMeters == null) return 1;
+      if (b.distanceMeters == null) return -1;
+      return a.distanceMeters - b.distanceMeters;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        userAddress,
+        userLocation: { latitude, longitude },
+        stations: stationsOut,
+      },
+    });
+  } catch (err) {
+    console.error("[nearby-stations] error:", err);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// ── 百度地图 AK（供前端使用）──────────────────────────────────
+
+app.get("/api/map-config", (req, res) => {
+  res.json({ ak: process.env.BAIDU_MAP_AK || "" });
+});
+
 // ── 定时爬虫（广深）────────────────────────────────────────────
 
 app.post("/api/cron/crawl", async (req, res) => {
@@ -168,10 +293,11 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API endpoints:`);
-  console.log(`  - POST /api/chat         对话接口`);
-  console.log(`  - POST /api/stt          语音转文字`);
-  console.log(`  - POST /api/cron/crawl   手动触发广深爬虫`);
-  console.log(`  - GET  /api/health       健康检查`);
+  console.log(`  - POST /api/chat             对话接口`);
+  console.log(`  - POST /api/stt              语音转文字`);
+  console.log(`  - POST /api/nearby-stations  地图定位推荐上车站`);
+  console.log(`  - POST /api/cron/crawl       手动触发广深爬虫`);
+  console.log(`  - GET  /api/health           健康检查`);
 
   console.log("[cron] 服务启动，开始预热广深数据...");
   crawlHotRoutes().catch((e) => console.error("[cron] startup crawl error:", e.message));
