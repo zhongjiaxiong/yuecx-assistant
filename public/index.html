@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <title>粤程助手</title>
 <style>
   :root {
@@ -653,38 +655,36 @@
     );
   }
 
-  // ── 地图定位推荐上车站 ──────────────────────────────────────
+  // ── 地图定位推荐上车站 (Leaflet + OpenStreetMap) ─────────
   var lastRouteContext = null;
-  var mapBaiduAK = null;
-  var bMapLoaded = false;
+  var currentMap = null;
   var mapOverlay = document.getElementById('map-overlay');
   var mapContainer = document.getElementById('map-container');
   var mapStations = document.getElementById('map-stations');
   var locBtn = document.getElementById('loc-btn');
   var mapCloseBtn = document.getElementById('map-close');
 
-  fetch('/api/map-config').then(function(r){return r.json()}).then(function(d){ mapBaiduAK = d.ak; }).catch(function(){});
-
-  function loadBaiduMapSDK(cb) {
-    if (bMapLoaded && window.BMapGL) { cb(); return; }
-    if (!mapBaiduAK) { alert('地图服务未配置'); return; }
-    window._bMapCallback = function() { bMapLoaded = true; cb(); };
-    var s = document.createElement('script');
-    s.src = 'https://api.map.baidu.com/api?v=1.0&type=webgl&ak=' + mapBaiduAK + '&callback=_bMapCallback';
-    document.head.appendChild(s);
-  }
-
-  function setLastRouteContext(items) {
-    if (!items || !items.length) return;
-    var first = items[0];
-    if (first._startCity && first._endCity && first._date) {
-      lastRouteContext = { startCity: first._startCity, endCity: first._endCity, date: first._date };
-    }
-  }
-
   function formatDist(m) {
     if (m == null) return '';
     return m < 1000 ? m + 'm' : (m / 1000).toFixed(1) + 'km';
+  }
+
+  function destroyMap() {
+    if (currentMap) { currentMap.remove(); currentMap = null; }
+  }
+
+  var userIcon = L.divIcon({
+    className: '',
+    html: '<svg width="28" height="28"><circle cx="14" cy="14" r="10" fill="#07c160" stroke="#fff" stroke-width="3"/><circle cx="14" cy="14" r="4" fill="#fff"/></svg>',
+    iconSize: [28, 28], iconAnchor: [14, 14],
+  });
+
+  function stationIcon(num) {
+    return L.divIcon({
+      className: '',
+      html: '<div style="background:#f5222d;color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3)">' + num + '</div>',
+      iconSize: [24, 24], iconAnchor: [12, 12],
+    });
   }
 
   function openMap() {
@@ -707,106 +707,72 @@
   }
 
   function doOpenMap() {
+    destroyMap();
     mapOverlay.classList.add('open');
     mapStations.innerHTML = '<div class="map-loading">正在查询附近上车站...</div>';
 
     if (!lastRouteContext) {
       mapStations.innerHTML = '<div class="map-empty">请先通过对话查询班次，再查看附近上车站</div>';
-      loadBaiduMapSDK(function() { showSimpleMap(); });
+      showSimpleMap();
       return;
     }
 
-    var reqBody = {
-      latitude: userLocation.latitude,
-      longitude: userLocation.longitude,
-      startCity: lastRouteContext.startCity,
-      endCity: lastRouteContext.endCity,
-      date: lastRouteContext.date,
-    };
-
     fetch('/api/nearby-stations', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reqBody),
+      body: JSON.stringify({
+        latitude: userLocation.latitude, longitude: userLocation.longitude,
+        startCity: lastRouteContext.startCity, endCity: lastRouteContext.endCity,
+        date: lastRouteContext.date,
+      }),
     })
     .then(function(r){ return r.json(); })
     .then(function(data) {
       if (!data.success || !data.data || !data.data.stations.length) {
         mapStations.innerHTML = '<div class="map-empty">暂无上车站数据</div>';
-        loadBaiduMapSDK(function() { showSimpleMap(); });
+        showSimpleMap();
         return;
       }
-      var stations = data.data.stations;
-      loadBaiduMapSDK(function() { renderMap(stations, data.data.userAddress); });
+      renderMap(data.data.stations, data.data.userAddress);
     })
     .catch(function() {
       mapStations.innerHTML = '<div class="map-empty">查询失败，请稍后再试</div>';
-      loadBaiduMapSDK(function() { showSimpleMap(); });
+      showSimpleMap();
     });
+  }
+
+  function initLeafletMap(center, zoom) {
+    var map = L.map(mapContainer).setView(center, zoom);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '&copy; OpenStreetMap',
+    }).addTo(map);
+    currentMap = map;
+    return map;
   }
 
   function showSimpleMap() {
-    if (!window.BMapGL) return;
-    var map = new BMapGL.Map(mapContainer);
-    var point = new BMapGL.Point(userLocation.longitude, userLocation.latitude);
-    map.centerAndZoom(point, 14);
-    map.enableScrollWheelZoom(true);
-    var coordsys = new BMapGL.Convertor();
-    var pArr = [point];
-    coordsys.translate(pArr, 1, 5, function(data) {
-      if (data.status === 0) {
-        map.centerAndZoom(data.points[0], 14);
-        var marker = new BMapGL.Marker(data.points[0]);
-        map.addOverlay(marker);
-        var label = new BMapGL.Label('我的位置', { offset: new BMapGL.Size(10, -20) });
-        label.setStyle({ color: '#fff', background: '#07c160', border: 'none', borderRadius: '4px', padding: '2px 8px', fontSize: '12px' });
-        marker.setLabel(label);
-      }
-    });
+    var lat = userLocation.latitude, lng = userLocation.longitude;
+    var map = initLeafletMap([lat, lng], 14);
+    L.marker([lat, lng], { icon: userIcon }).addTo(map).bindPopup('我的位置').openPopup();
   }
 
   function renderMap(stations, userAddr) {
-    if (!window.BMapGL) return;
-    var map = new BMapGL.Map(mapContainer);
-    map.enableScrollWheelZoom(true);
+    var lat = userLocation.latitude, lng = userLocation.longitude;
+    var map = initLeafletMap([lat, lng], 13);
+    var bounds = L.latLngBounds([[lat, lng]]);
 
-    var userPoint = new BMapGL.Point(userLocation.longitude, userLocation.latitude);
-    var allPoints = [userPoint];
-    var stWithCoords = [];
+    L.marker([lat, lng], { icon: userIcon }).addTo(map)
+      .bindPopup(userAddr ? userAddr.formatted : '我的位置');
 
-    stations.forEach(function(st) {
+    stations.forEach(function(st, i) {
       if (st.lat && st.lng) {
-        allPoints.push(new BMapGL.Point(st.lng, st.lat));
-        stWithCoords.push(st);
+        bounds.extend([st.lat, st.lng]);
+        L.marker([st.lat, st.lng], { icon: stationIcon(i + 1) }).addTo(map)
+          .bindPopup('<b>' + (i+1) + '. ' + st.name + '</b><br>' + st.intervalCount + '个班次');
       }
     });
 
-    var coordsys = new BMapGL.Convertor();
-    coordsys.translate(allPoints, 1, 5, function(data) {
-      if (data.status !== 0) return;
-      var pts = data.points;
-      map.centerAndZoom(pts[0], 13);
-
-      var userMarker = new BMapGL.Marker(pts[0], {
-        icon: new BMapGL.Icon('data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28"><circle cx="14" cy="14" r="10" fill="%2307c160" stroke="%23fff" stroke-width="3"/><circle cx="14" cy="14" r="4" fill="%23fff"/></svg>'), new BMapGL.Size(28, 28))
-      });
-      map.addOverlay(userMarker);
-      var userLabel = new BMapGL.Label(userAddr ? userAddr.formatted : '我的位置', { offset: new BMapGL.Size(14, -24) });
-      userLabel.setStyle({ color: '#fff', background: '#07c160', border: 'none', borderRadius: '4px', padding: '2px 8px', fontSize: '11px', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' });
-      userMarker.setLabel(userLabel);
-
-      stWithCoords.forEach(function(st, i) {
-        var pt = pts[i + 1];
-        var mk = new BMapGL.Marker(pt);
-        map.addOverlay(mk);
-        var lb = new BMapGL.Label((i + 1) + '. ' + st.name, { offset: new BMapGL.Size(10, -20) });
-        lb.setStyle({ color: '#333', background: '#fff', border: '1px solid #ddd', borderRadius: '4px', padding: '2px 8px', fontSize: '11px', whiteSpace: 'nowrap' });
-        mk.setLabel(lb);
-      });
-
-      if (pts.length > 1) {
-        map.setViewport(pts, { margins: [40, 40, 40, 40] });
-      }
-    });
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [30, 30] });
 
     var html = '';
     if (userAddr) html += '<div class="map-loc-hint">📍 当前位置: ' + esc(userAddr.formatted || '') + '</div>';
@@ -825,6 +791,7 @@
       btn.addEventListener('click', function() {
         var name = btn.closest('.map-st-item').dataset.name;
         mapOverlay.classList.remove('open');
+        destroyMap();
         inputEl.value = '我选择从' + name + '上车';
         send();
       });
@@ -832,7 +799,7 @@
   }
 
   locBtn.addEventListener('click', openMap);
-  mapCloseBtn.addEventListener('click', function() { mapOverlay.classList.remove('open'); });
+  mapCloseBtn.addEventListener('click', function() { mapOverlay.classList.remove('open'); destroyMap(); });
 
   addMessage('你好！我是粤程助手 🚌\n\n告诉我从哪到哪、哪天走，帮你找最合适的班次。\n\n例如："明天从深圳南山去广州天河"', 'bot');
   fetch('/api/health').catch(function(){});
