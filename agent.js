@@ -67,7 +67,15 @@ function buildSystemPrompt() {
    - 用户说"订第一班"等 → 调 book_interval。
    - 用 [BOOKING_CARD:JSON] 输出（单行JSON），前端渲染为订票卡片。
    - 示例: [BOOKING_CARD:{"route":"深圳→广州","date":"2026-04-14","fromTime":"08:30","boardingTime":"08:45","boardingStation":"深大地铁站","dropoffStation":"体育西路","priceYuan":"50.00","residue":8}]
-8. 简洁友好。不暴露内部 ID。`;
+8. 简洁友好。不暴露内部 ID。
+
+📍 自动定位能力:
+- get_user_location 现在会尝试获取用户的 GPS 位置。如果返回 success=true 且有 city/district，说明用户已授权浏览器定位。
+- 定位成功时: 你已经知道用户所在城市和区域，不需要再追问"你在哪个区"。直接将 district 作为 preferBoarding 关键词使用。
+  例: get_user_location 返回 city="深圳", district="南山" → 自动设置 preferBoarding=["南山"]，告知用户"检测到你在深圳南山"。
+- 定位失败时（needAsk=true）: 退回到口头追问模式，正常询问用户出发区域。
+- suggest_boarding 工具: 在已知路线(startCity+endCity+date)且用户有定位时，可以调用此工具获取按距离排序的推荐上车站列表。适合在用户没提具体区域但有定位时使用。
+- ⚠ 不要每次都调 get_user_location，只在对话开始时、需要确认出发位置时调用一次即可。后续轮次复用之前的结果。`;
 }
 
 async function callLLM(messages) {
@@ -90,7 +98,7 @@ async function callLLM(messages) {
   return resp.json();
 }
 
-async function chat(messages) {
+async function chat(messages, userId, ctx) {
   if (messages[0]?.role !== "system") {
     messages.unshift({ role: "system", content: buildSystemPrompt() });
   }
@@ -111,7 +119,7 @@ async function chat(messages) {
       const args = typeof tc.function.arguments === "string"
         ? JSON.parse(tc.function.arguments)
         : tc.function.arguments;
-      const toolResult = await executeTool(tc.function.name, args);
+      const toolResult = await executeTool(tc.function.name, args, userId, ctx);
       messages.push({ role: "tool", tool_call_id: tc.id, content: toolResult });
     }
   }
