@@ -112,10 +112,23 @@ async function callLLM(messages) {
   return resp.json();
 }
 
-async function chat(messages, userId, ctx) {
+const TOOL_STEP_MAP = {
+  get_user_location: "locating",
+  search_intervals: "searching",
+  score_and_rank: "searching",
+  suggest_boarding: "searching",
+  verify_realtime: "searching",
+  refresh_cache: "searching",
+  book_interval: "booking",
+  list_cities: "searching",
+};
+
+async function chat(messages, userId, ctx, onProgress) {
   if (messages[0]?.role !== "system") {
     messages.unshift({ role: "system", content: buildSystemPrompt() });
   }
+
+  if (onProgress) onProgress("thinking");
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const result = await callLLM(messages);
@@ -130,12 +143,17 @@ async function chat(messages, userId, ctx) {
     }
 
     for (const tc of msg.tool_calls) {
+      const step = TOOL_STEP_MAP[tc.function.name] || "processing";
+      if (onProgress) onProgress(step);
+
       const args = typeof tc.function.arguments === "string"
         ? JSON.parse(tc.function.arguments)
         : tc.function.arguments;
       const toolResult = await executeTool(tc.function.name, args, userId, ctx);
       messages.push({ role: "tool", tool_call_id: tc.id, content: toolResult });
     }
+
+    if (onProgress) onProgress("thinking");
   }
 
   return "抱歉，处理中遇到了问题，请重试。";

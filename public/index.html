@@ -109,27 +109,37 @@
   /* Route Results Card */
   .rr-wrap { margin-top: 8px; }
   .rr-item {
-    display: flex; align-items: stretch; margin-bottom: 8px;
-    border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff;
+    margin-bottom: 8px; border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden; background: #fff;
   }
   .rr-item.has-warn { border-left: 3px solid #faad14; }
-  .rr-rank {
-    display: flex; align-items: center; justify-content: center;
-    width: 32px; flex-shrink: 0; background: var(--green-light);
-    font-size: 14px; font-weight: 700; color: var(--green);
+  .rr-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 12px; border-bottom: 1px solid #f5f5f5;
   }
-  .rr-body { flex: 1; padding: 8px 10px; min-width: 0; }
-  .rr-top { display: flex; align-items: baseline; gap: 6px; }
-  .rr-time { font-size: 18px; font-weight: 700; color: #222; }
-  .rr-route { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rr-bottom { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 12px; color: #666; }
-  .rr-price { font-weight: 600; color: #f5222d; }
-  .rr-seats { color: #999; }
+  .rr-left { display: flex; align-items: center; gap: 8px; }
+  .rr-rank {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--green);
+    color: #fff; font-size: 12px; font-weight: 700; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .rr-time { font-size: 18px; font-weight: 700; color: #222; white-space: nowrap; flex-shrink: 0; }
+  .rr-price { font-size: 16px; font-weight: 600; color: #f5222d; white-space: nowrap; }
+  .rr-body { padding: 6px 12px 8px; }
+  .rr-station { font-size: 13px; color: #555; line-height: 1.6; word-break: break-word; }
+  .rr-station-label { color: #999; margin-right: 4px; }
+  .rr-dist-tag { font-size: 11px; color: var(--green); margin-left: 4px; }
+  .rr-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 12px 8px; font-size: 12px; color: #999;
+  }
+  .rr-meta-left { display: flex; gap: 10px; align-items: center; }
+  .rr-seats { color: #666; }
   .rr-warn { color: #faad14; font-size: 11px; }
-  .rr-right { display: flex; align-items: center; padding: 0 10px; flex-shrink: 0; }
   .rr-book-btn {
-    padding: 6px 10px; border: 1px solid var(--green); border-radius: 14px;
-    background: #fff; color: var(--green); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+    padding: 5px 14px; border: 1px solid var(--green); border-radius: 14px;
+    background: #fff; color: var(--green); font-size: 12px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
   }
   .rr-book-btn:active { background: var(--green); color: #fff; }
   .rr-footer { font-size: 12px; color: #999; padding: 2px 0; }
@@ -492,13 +502,6 @@
 
   function esc(s) { var d = document.createElement('span'); d.textContent = s; return d.innerHTML; }
 
-  function shortenStation(name) {
-    if (!name) return '';
-    return name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
-      .replace(/地铁站[A-Z]?\d*口?/g, '站').replace(/公交站/g, '站')
-      .replace(/旁边|路边|前面|出来|左转/g, '').trim();
-  }
-
   function renderBotContent(text) {
     var frag = document.createDocumentFragment();
     var tags = ['ROUTE_RESULTS', 'BOOKING_CARD'];
@@ -533,6 +536,15 @@
     return frag;
   }
 
+  function fmtDist(d) {
+    if (!d) return '';
+    var s = String(d);
+    if (s.indexOf('km') !== -1 || s.indexOf('m') !== -1) return s;
+    var n = parseFloat(s);
+    if (isNaN(n)) return s;
+    return n < 1 ? Math.round(n * 1000) + 'm' : n.toFixed(1) + 'km';
+  }
+
   function buildRouteResults(data) {
     if (data.startCity && data.endCity && data.date) {
       lastRouteContext = { startCity: data.startCity, endCity: data.endCity, date: data.date };
@@ -543,14 +555,22 @@
     var wrap = document.createElement('div'); wrap.className = 'rr-wrap';
     items.forEach(function(it, idx) {
       var el = document.createElement('div'); el.className = 'rr-item' + (it.warn ? ' has-warn' : '');
+      var bDistHtml = it.boardingDist ? '<span class="rr-dist-tag">约' + esc(fmtDist(it.boardingDist)) + '</span>' : '';
+      var dDistHtml = it.dropoffDist ? '<span class="rr-dist-tag">约' + esc(fmtDist(it.dropoffDist)) + '</span>' : '';
       el.innerHTML =
-        '<div class="rr-rank">' + (idx+1) + '</div>' +
-        '<div class="rr-body">' +
-          '<div class="rr-top"><span class="rr-time">' + esc(it.time||'') + '</span><span class="rr-route">' + esc(shortenStation(it.boarding)) + ' → ' + esc(shortenStation(it.dropoff)) + '</span></div>' +
-          '<div class="rr-bottom"><span class="rr-price">¥' + esc(it.price||'') + '</span><span class="rr-seats">余' + (it.seats!=null?it.seats:'?') + '座</span>' +
-          (it.warn ? '<span class="rr-warn">⚠ ' + esc(it.warn) + '</span>' : '') + '</div>' +
+        '<div class="rr-header">' +
+          '<div class="rr-left"><span class="rr-rank">' + (idx+1) + '</span><span class="rr-time">' + esc(it.time||'') + '</span></div>' +
+          '<span class="rr-price">¥' + esc(it.price||'') + '</span>' +
         '</div>' +
-        '<div class="rr-right"><button class="rr-book-btn">订票</button></div>';
+        '<div class="rr-body">' +
+          '<div class="rr-station"><span class="rr-station-label">上:</span>' + esc(it.boarding||'') + bDistHtml + '</div>' +
+          '<div class="rr-station"><span class="rr-station-label">下:</span>' + esc(it.dropoff||'') + dDistHtml + '</div>' +
+        '</div>' +
+        '<div class="rr-meta">' +
+          '<div class="rr-meta-left"><span class="rr-seats">余' + (it.seats!=null?it.seats:'?') + '座</span>' +
+          (it.warn ? '<span class="rr-warn">⚠ ' + esc(it.warn) + '</span>' : '') + '</div>' +
+          '<button class="rr-book-btn">订票</button>' +
+        '</div>';
       el.querySelector('.rr-book-btn').addEventListener('click', function(e) {
         e.stopPropagation(); inputEl.value = '订第' + (idx+1) + '班'; send();
       });
@@ -604,25 +624,81 @@
 
   function autoGrow() { inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px'; }
 
+  var STEP_LABELS = {
+    thinking: '思考中',
+    locating: '定位中',
+    searching: '查询班次',
+    ranking: '智能排序',
+    booking: '订票处理中',
+    processing: '处理中'
+  };
+
+  function updateTypingStep(step) {
+    var el = document.getElementById('chat-typing');
+    if (!el) return;
+    var bubble = el.querySelector('.bubble');
+    if (bubble) bubble.textContent = STEP_LABELS[step] || step;
+    scrollBottom();
+  }
+
   async function doChat(text) {
     var typDiv = document.createElement('div'); typDiv.className = 'msg bot typing'; typDiv.id = 'chat-typing';
-    typDiv.innerHTML = '<div class="avatar">🚌</div><div class="bubble">查询中</div>';
+    typDiv.innerHTML = '<div class="avatar">🚌</div><div class="bubble">思考中</div>';
     messagesEl.appendChild(typDiv); scrollBottom();
 
     try {
       var controller = new AbortController();
-      var timer = setTimeout(function() { controller.abort(); }, 90000);
+      var timer = setTimeout(function() { controller.abort(); }, 95000);
       var payload = { sessionId: sessionId, message: text };
       if (userLocation) payload.location = userLocation;
       var resp = await fetch('/api/chat', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload), signal: controller.signal,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
       });
       clearTimeout(timer);
-      var ct = document.getElementById('chat-typing'); if (ct) ct.remove();
       if (!resp.ok) throw new Error('fail');
-      var data = await resp.json();
-      addMessage(data.reply || '（无回复）', 'bot');
+
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder();
+      var buf = '';
+      var finalReply = '';
+      var gotDone = false;
+
+      while (true) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buf += decoder.decode(chunk.value, { stream: true });
+        var lines = buf.split('\n');
+        buf = lines.pop() || '';
+        for (var li = 0; li < lines.length; li++) {
+          var line = lines[li];
+          if (line.indexOf('data: ') !== 0) continue;
+          try {
+            var evt = JSON.parse(line.slice(6));
+            if (evt.type === 'progress') {
+              updateTypingStep(evt.step);
+            } else if (evt.type === 'done') {
+              finalReply = evt.reply || '';
+              gotDone = true;
+            } else if (evt.type === 'error') {
+              finalReply = '';
+              gotDone = true;
+              var ct0 = document.getElementById('chat-typing'); if (ct0) ct0.remove();
+              addMessage(evt.error || '服务异常', 'bot');
+              return;
+            }
+          } catch(pe) {}
+        }
+      }
+
+      var ct = document.getElementById('chat-typing'); if (ct) ct.remove();
+      if (gotDone) {
+        addMessage(finalReply || '（无回复）', 'bot');
+      } else {
+        addMessage('（无回复）', 'bot');
+      }
     } catch(e) {
       var ct2 = document.getElementById('chat-typing'); if (ct2) ct2.remove();
       addMessage(e.name === 'AbortError' ? '请求超时，服务启动中，请再试一次' : '网络异常，请稍后重试', 'bot');

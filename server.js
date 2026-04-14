@@ -64,21 +64,63 @@ app.post("/api/chat", async (req, res) => {
 
   session.messages.push({ role: "user", content: message });
 
-  const timeout = setTimeout(() => {
-    if (!res.headersSent) {
-      res.status(504).json({ error: "请求超时，请重试" });
-    }
-  }, 60000);
+  const wantsSSE = (req.headers.accept || "").includes("text/event-stream");
 
-  try {
-    const ctx = { location: session.location };
-    const reply = await chat(session.messages, null, ctx);
-    clearTimeout(timeout);
-    if (!res.headersSent) res.json({ reply });
-  } catch (err) {
-    clearTimeout(timeout);
-    console.error("Chat error:", err);
-    if (!res.headersSent) res.status(500).json({ error: "服务异常，请稍后重试" });
+  if (wantsSSE) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    const timeout = setTimeout(() => {
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: "error", error: "请求超时，请重试" })}\n\n`);
+        res.end();
+      }
+    }, 90000);
+
+    let lastStep = "";
+    const onProgress = (step) => {
+      if (step !== lastStep && !res.writableEnded) {
+        lastStep = step;
+        res.write(`data: ${JSON.stringify({ type: "progress", step })}\n\n`);
+      }
+    };
+
+    try {
+      const ctx = { location: session.location };
+      const reply = await chat(session.messages, null, ctx, onProgress);
+      clearTimeout(timeout);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: "done", reply })}\n\n`);
+        res.end();
+      }
+    } catch (err) {
+      clearTimeout(timeout);
+      console.error("Chat error:", err);
+      if (!res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: "error", error: "服务异常，请稍后重试" })}\n\n`);
+        res.end();
+      }
+    }
+  } else {
+    const timeout = setTimeout(() => {
+      if (!res.headersSent) {
+        res.status(504).json({ error: "请求超时，请重试" });
+      }
+    }, 60000);
+
+    try {
+      const ctx = { location: session.location };
+      const reply = await chat(session.messages, null, ctx);
+      clearTimeout(timeout);
+      if (!res.headersSent) res.json({ reply });
+    } catch (err) {
+      clearTimeout(timeout);
+      console.error("Chat error:", err);
+      if (!res.headersSent) res.status(500).json({ error: "服务异常，请稍后重试" });
+    }
   }
 });
 

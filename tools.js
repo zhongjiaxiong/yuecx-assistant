@@ -102,16 +102,13 @@ async function searchIntervals({ date, startCity, endCity }) {
   if (!routeId) return { success: false, error: `不支持的路线: ${start.city_name}->${end.city_name}` };
 
   let cacheAge = await db.getCacheAge(routeId, date);
-  const expired = cacheAge === null || cacheAge > CACHE_MAX_MINUTES;
 
-  if (expired) {
+  if (cacheAge === null) {
     try {
       await crawlOnDemand(start.city_id, end.city_id, date);
       cacheAge = 0;
     } catch (err) {
-      if (cacheAge === null) {
-        return { success: false, error: `实时查询失败: ${err.message}` };
-      }
+      return { success: false, error: `暂无该日期数据，请稍后再试` };
     }
   }
 
