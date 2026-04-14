@@ -16,7 +16,9 @@ const path = require("path");
 const multer = require("multer");
 const jwt = require("jsonwebtoken");
 const { chat, buildSystemPrompt } = require("./agent");
-const { crawlHotRoutes, crawlOnDemand } = require("./crawler");
+const { crawlHotRoutes, crawlOnDemand, syncMeta } = require("./crawler");
+const { syncBusbossMeta } = require("./busboss_crawler");
+const { startAutoRefresh } = require("./token_manager");
 const gaodeMap = require("./gaode-map");
 const db = require("./db");
 
@@ -398,6 +400,15 @@ app.post("/api/cron/crawl", async (req, res) => {
   crawlHotRoutes().catch((e) => console.error("[cron] manual trigger error:", e.message));
 });
 
+app.post("/api/cron/sync-meta", async (req, res) => {
+  const secret = req.headers["x-cron-secret"] || req.query.secret;
+  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+    return res.status(403).json({ error: "forbidden" });
+  }
+  res.json({ status: "started" });
+  syncMeta().catch((e) => console.error("[sync-meta] error:", e.message));
+});
+
 function msUntilBeijing(hour, minute) {
   const now = new Date();
   const bj = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
@@ -431,8 +442,17 @@ app.listen(PORT, () => {
   console.log(`  - POST /api/cron/crawl       手动触发广深爬虫`);
   console.log(`  - GET  /api/health           健康检查`);
 
-  console.log("[cron] 服务启动，开始预热广深数据...");
-  crawlHotRoutes().catch((e) => console.error("[cron] startup crawl error:", e.message));
+  console.log("[startup] 同步所有城市和路线元数据...");
+  syncMeta()
+    .then(() => {
+      console.log("[startup] 元数据同步完成，开始预热广深数据...");
+      return crawlHotRoutes();
+    })
+    .catch((e) => console.error("[startup] error:", e.message));
+
+  // 车盈网: 启动 token 自动续期 + 同步元数据
+  startAutoRefresh();
+  syncBusbossMeta().catch((e) => console.error("[busboss] startup meta sync error:", e.message));
 
   scheduleDailyCrawl();
 });

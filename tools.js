@@ -9,9 +9,21 @@
 const db = require("./db");
 const { scoreAndRank, ADCODE_DISTRICT } = require("./scorer");
 const { requestGETv1, crawlOnDemand } = require("./crawler");
+const { crawlBusbossOnDemand } = require("./busboss_crawler");
+const { getValidToken } = require("./token_manager");
 const gaodeMap = require("./gaode-map");
 
 const CACHE_MAX_MINUTES = parseInt(process.env.CACHE_MAX_MINUTES || "5", 10);
+
+const SOURCE_LABELS = {
+  yuecx: "粤出行",
+  busboss: "如约城际",
+};
+
+const MINIAPP_NAMES = {
+  yuecx: "粤出行城际巴士",
+  busboss: "如约城际巴士",
+};
 
 const MINIAPP_NAME = "粤出行城际巴士";
 
@@ -90,47 +102,116 @@ async function listCities({ startCity } = {}) {
   };
 }
 
-// ── Tool 3: search_intervals ────────────────────────────────
+// ── Tool 3: search_intervals (多源聚合) ─────────────────────
 
 async function searchIntervals({ date, startCity, endCity }) {
-  const start = await resolveCityId(startCity);
-  if (!start) return { success: false, error: `未找到出发城市: ${startCity}` };
-  const end = await resolveCityId(endCity);
-  if (!end) return { success: false, error: `未找到到达城市: ${endCity}` };
+  const allCityRows = await db.findCityByName(startCity);
+  if (allCityRows.length === 0) return { success: false, error: `未找到出发城市: ${startCity}` };
+  const allEndRows = await db.findCityByName(endCity);
+  if (allEndRows.length === 0) return { success: false, error: `未找到到达城市: ${endCity}` };
 
-  const routeId = await db.getRouteId(start.city_id, end.city_id);
-  if (!routeId) return { success: false, error: `不支持的路线: ${start.city_name}->${end.city_name}` };
+  const ylxStart = allCityRows.find((r) => r.source === "yuecx");
+  const ylxEnd = allEndRows.find((r) => r.source === "yuecx");
+  const bbStart = allCityRows.find((r) => r.source === "busboss");
+  const bbEnd = allEndRows.find((r) => r.source === "busboss");
 
-  let cacheAge = await db.getCacheAge(routeId, date);
+  const displayStartName = (ylxStart || bbStart || allCityRows[0]).city_name;
+  const displayEndName = (ylxEnd || bbEnd || allEndRows[0]).city_name;
 
-  if (cacheAge === null) {
-    try {
-      await crawlOnDemand(start.city_id, end.city_id, date);
-      cacheAge = 0;
-    } catch (err) {
-      return { success: false, error: `暂无该日期数据，请稍后再试` };
+  const tasks = [];
+  const sources = [];
+
+  // 亿路行源
+  if (ylxStart && ylxEnd) {
+    tasks.push(fetchYlxIntervals(ylxStart.city_id, ylxEnd.city_id, date));
+    sources.push("yuecx");
+  }
+
+  // 车盈网源
+  if (bbStart && bbEnd) {
+    const token = await getValidToken();
+    if (token) {
+      tasks.push(fetchBusbossIntervalsSafe(bbStart.city_id, bbEnd.city_id, date));
+      sources.push("busboss");
     }
   }
 
-  const intervals = await db.queryIntervals(routeId, date);
+  if (tasks.length === 0) {
+    return { success: false, error: `不支持的路线: ${displayStartName}->${displayEndName}` };
+  }
+
+  const results = await Promise.allSettled(tasks);
+  let allIntervals = [];
+  const sourceStats = {};
+
+  for (let i = 0; i < results.length; i++) {
+    const src = sources[i];
+    if (results[i].status === "fulfilled") {
+      const ivs = results[i].value;
+      sourceStats[src] = ivs.length;
+      allIntervals.push(...ivs);
+    } else {
+      console.error(`[search] ${src} 查询失败:`, results[i].reason?.message);
+      sourceStats[src] = 0;
+    }
+  }
+
+  allIntervals.sort((a, b) => (a.from_time || "").localeCompare(b.from_time || ""));
 
   return {
     success: true,
     data: {
       date,
-      route: `${start.city_name}->${end.city_name}`,
-      startCityId: start.city_id,
-      endCityId: end.city_id,
-      startCityName: start.city_name,
-      endCityName: end.city_name,
-      intervalCount: intervals.length,
-      cacheAgeMinutes: cacheAge ?? 0,
-      intervals: intervals.map(formatInterval),
+      route: `${displayStartName}->${displayEndName}`,
+      startCityId: ylxStart?.city_id || bbStart?.city_id,
+      endCityId: ylxEnd?.city_id || bbEnd?.city_id,
+      startCityName: displayStartName,
+      endCityName: displayEndName,
+      intervalCount: allIntervals.length,
+      sourceStats,
+      intervals: allIntervals.map(formatInterval),
     },
   };
 }
 
+async function fetchYlxIntervals(startCityId, endCityId, date) {
+  const routeId = await db.getRouteId(startCityId, endCityId, "yuecx");
+  if (!routeId) return [];
+
+  let cacheAge = await db.getCacheAge(routeId, date);
+  if (cacheAge === null || cacheAge > CACHE_MAX_MINUTES) {
+    try {
+      await crawlOnDemand(startCityId, endCityId, date);
+    } catch (err) {
+      console.error("[search] ylxweb crawl failed:", err.message);
+      if (cacheAge === null) return [];
+    }
+  }
+
+  const rows = await db.queryIntervals(routeId, date);
+  return rows.map((r) => ({ ...r, source: "yuecx" }));
+}
+
+async function fetchBusbossIntervalsSafe(bbStartCityId, bbEndCityId, date) {
+  try {
+    const routeId = await db.getRouteId(bbStartCityId, bbEndCityId, "busboss");
+
+    let cacheAge = routeId ? await db.getCacheAge(routeId, date) : null;
+    if (cacheAge === null || cacheAge > CACHE_MAX_MINUTES) {
+      const ivs = await crawlBusbossOnDemand(bbStartCityId, bbEndCityId, date);
+      return ivs.map((r) => ({ ...r, source: "busboss" }));
+    }
+
+    const rows = await db.queryIntervals(routeId, date);
+    return rows.map((r) => ({ ...r, source: "busboss" }));
+  } catch (err) {
+    console.error("[search] busboss crawl failed:", err.message);
+    return [];
+  }
+}
+
 function formatInterval(row) {
+  const source = row.source || "yuecx";
   return {
     id: row.interval_id,
     intervalName: row.interval_name,
@@ -145,6 +226,8 @@ function formatInterval(row) {
     dropoffStations: row.dropoff_stations || [],
     boarding_stations: row.boarding_stations || [],
     dropoff_stations: row.dropoff_stations || [],
+    source,
+    sourceName: SOURCE_LABELS[source] || source,
   };
 }
 
@@ -276,11 +359,27 @@ async function bookInterval({ date, startCity, endCity, intervalId, boardingStat
   const end = await resolveCityId(endCity);
   if (!start || !end) return { success: false, error: "城市未找到" };
 
-  const routeId = await db.getRouteId(start.city_id, end.city_id);
-  if (!routeId) return { success: false, error: "路线不存在" };
+  // Search across all sources to find the interval
+  const allCityRows = await db.findCityByName(startCity);
+  const allEndRows = await db.findCityByName(endCity);
+  let iv = null;
+  let matchedSource = "yuecx";
 
-  const intervals = await db.queryIntervals(routeId, date);
-  const iv = intervals.find((r) => String(r.interval_id) === String(intervalId));
+  for (const src of ["yuecx", "busboss"]) {
+    const sCity = allCityRows.find((r) => r.source === src);
+    const eCity = allEndRows.find((r) => r.source === src);
+    if (!sCity || !eCity) continue;
+    const routeId = await db.getRouteId(sCity.city_id, eCity.city_id, src);
+    if (!routeId) continue;
+    const intervals = await db.queryIntervals(routeId, date);
+    const found = intervals.find((r) => String(r.interval_id) === String(intervalId));
+    if (found) {
+      iv = found;
+      matchedSource = src;
+      break;
+    }
+  }
+
   if (!iv) return { success: false, error: `未找到班次 ${intervalId}` };
 
   const boarding = (iv.boarding_stations || []).find(
@@ -290,6 +389,8 @@ async function bookInterval({ date, startCity, endCity, intervalId, boardingStat
   const dropoff = (iv.dropoff_stations || []).find(
     (s) => !dropoffStationName || s.name.includes(dropoffStationName)
   ) || (iv.dropoff_stations || [])[0];
+
+  const miniappName = MINIAPP_NAMES[matchedSource] || MINIAPP_NAME;
 
   return {
     success: true,
@@ -303,7 +404,9 @@ async function bookInterval({ date, startCity, endCity, intervalId, boardingStat
       dropoffStation: dropoff?.name || "未知",
       priceYuan: (iv.price_fen / 100).toFixed(2),
       residue: iv.residue,
-      miniappName: MINIAPP_NAME,
+      miniappName,
+      source: matchedSource,
+      sourceName: SOURCE_LABELS[matchedSource] || matchedSource,
     },
   };
 }

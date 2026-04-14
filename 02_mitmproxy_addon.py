@@ -14,7 +14,8 @@ import json
 import time
 import os
 from datetime import datetime
-from mitmproxy import http, ctx
+from mitmproxy import http, ctx, connection
+from mitmproxy.net.server_spec import ServerSpec
 
 OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "captured_apis.json")
@@ -68,6 +69,34 @@ def match_request(flow: http.HTTPFlow) -> bool:
     return False
 
 
+DNS_OVERRIDES = {
+    "wx.open.class.busboss.cn": "110.75.170.167",
+    "cdn.class.busboss.cn": "110.75.170.167",
+}
+
+
+def request(flow: http.HTTPFlow):
+    """Override DNS for hosts hijacked by /etc/hosts"""
+    host = flow.request.pretty_host
+    if host in DNS_OVERRIDES:
+        real_ip = DNS_OVERRIDES[host]
+        port = flow.request.port or 443
+        flow.request.host = host
+        ctx.log.info(f"[DNS-FIX] {host} -> {real_ip}:{port}")
+
+
+def server_connect(server_hook):
+    """Rewrite server address for DNS-overridden hosts (mitmproxy 9.x API)"""
+    conn = server_hook.server
+    if conn and conn.address:
+        host = conn.address[0]
+        if host in DNS_OVERRIDES:
+            real_ip = DNS_OVERRIDES[host]
+            port = conn.address[1]
+            conn.address = (real_ip, port)
+            ctx.log.info(f"[DNS-FIX] Connecting to {real_ip}:{port} instead of {host}")
+
+
 def response(flow: http.HTTPFlow):
     """捕获响应"""
     if not match_request(flow):
@@ -94,7 +123,7 @@ def response(flow: http.HTTPFlow):
 
     entry = {
         "timestamp": datetime.now().isoformat(),
-        "platform": detect_platform(host),  # 识别平台
+        "platform": detect_platform(req.pretty_host),
         "method": req.method,
         "url": req.pretty_url,
         "host": req.pretty_host,

@@ -28,11 +28,23 @@ async function upsertCity(cityId, cityName, source = "yuecx") {
 
 async function findCityByName(name) {
   const { rows } = await pool.query(
-    `SELECT city_id, city_name FROM cities
+    `SELECT city_id, city_name, source FROM cities
      WHERE city_name = $1 OR city_name LIKE $2 OR $1 LIKE city_name || '%'
      ORDER BY (city_name = $1) DESC, length(city_name) DESC
-     LIMIT 5`,
+     LIMIT 10`,
     [name, `%${name}%`]
+  );
+  return rows;
+}
+
+async function findCityByNameAndSource(name, source) {
+  const { rows } = await pool.query(
+    `SELECT city_id, city_name, source FROM cities
+     WHERE (city_name = $1 OR city_name LIKE $2 OR $1 LIKE city_name || '%')
+       AND source = $3
+     ORDER BY (city_name = $1) DESC, length(city_name) DESC
+     LIMIT 5`,
+    [name, `%${name}%`, source]
   );
   return rows;
 }
@@ -167,11 +179,34 @@ async function upsertIntervals(intervals) {
 async function queryIntervals(routeId, takeDate) {
   const { rows } = await pool.query(
     `SELECT interval_id, from_time, interval_name, price_fen, residue,
-            status, line_id, boarding_stations, dropoff_stations, crawl_time
+            status, line_id, boarding_stations, dropoff_stations, crawl_time, source
      FROM intervals
      WHERE route_id = $1 AND take_date = $2 AND status = 1
      ORDER BY from_time`,
     [routeId, takeDate]
+  );
+  return rows;
+}
+
+/**
+ * 跨 source 聚合查询: 按城市名查所有源的班次, 按 from_time 排序
+ */
+async function queryIntervalsByCity(startCityName, endCityName, takeDate) {
+  const { rows } = await pool.query(
+    `SELECT i.interval_id, i.from_time, i.interval_name, i.price_fen, i.residue,
+            i.status, i.line_id, i.boarding_stations, i.dropoff_stations,
+            i.crawl_time, i.source,
+            r.start_city_id, r.end_city_id
+     FROM intervals i
+     JOIN routes r ON i.route_id = r.id
+     JOIN cities c1 ON r.start_city_id = c1.city_id AND r.source = c1.source
+     JOIN cities c2 ON r.end_city_id = c2.city_id AND r.source = c2.source
+     WHERE (c1.city_name = $1 OR c1.city_name LIKE $4)
+       AND (c2.city_name = $2 OR c2.city_name LIKE $5)
+       AND i.take_date = $3
+       AND i.status = 1
+     ORDER BY i.from_time`,
+    [startCityName, endCityName, takeDate, `%${startCityName}%`, `%${endCityName}%`]
   );
   return rows;
 }
@@ -353,9 +388,9 @@ async function close() {
 
 module.exports = {
   pool,
-  upsertCity, findCityByName, getAllCities,
+  upsertCity, findCityByName, findCityByNameAndSource, getAllCities,
   upsertRoute, getRouteId, getHotRoutes, getAllRoutes, getDestinations, updateRouteLastCrawl,
-  upsertIntervals, queryIntervals, getCacheAge, cleanExpired,
+  upsertIntervals, queryIntervals, queryIntervalsByCity, getCacheAge, cleanExpired,
   upsertStationCoord, upsertStationCoordsBatch, getStationCoords, getAllStationNames,
   saveOrder, getOrderById, listOrders, updateOrderStatus,
   migrate, close,

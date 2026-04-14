@@ -167,6 +167,13 @@
     cursor: pointer; white-space: nowrap;
   }
   .rr-book-btn:active { background: var(--green); color: #fff; }
+  .rr-source-badge {
+    display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 10px;
+    font-weight: 600; margin-left: 6px; vertical-align: middle; line-height: 16px;
+  }
+  .rr-source-badge.yuecx { background: #e8f8ee; color: #07c160; }
+  .rr-source-badge.busboss { background: #e6f0ff; color: #1677ff; }
+  .rr-summary { font-size: 12px; color: #666; padding: 6px 0 2px; line-height: 1.6; }
   .rr-footer { font-size: 12px; color: #999; padding: 2px 0; }
 
   /* Booking Card */
@@ -578,13 +585,31 @@
     var items = data.items || data;
     if (!Array.isArray(items)) return document.createTextNode('');
     var wrap = document.createElement('div'); wrap.className = 'rr-wrap';
+
+    // source summary
+    var srcCounts = {};
+    items.forEach(function(it) {
+      var sn = it.sourceName || '粤出行';
+      srcCounts[sn] = (srcCounts[sn] || 0) + 1;
+    });
+    var srcKeys = Object.keys(srcCounts);
+    if (srcKeys.length > 0) {
+      var sumEl = document.createElement('div'); sumEl.className = 'rr-summary';
+      var parts = srcKeys.map(function(k) { return k + ' ' + srcCounts[k] + '班'; });
+      sumEl.textContent = '综合 ' + srcKeys.length + ' 个平台 · ' + parts.join(' + ') + ' · 共 ' + items.length + ' 条班次';
+      wrap.appendChild(sumEl);
+    }
+
     items.forEach(function(it, idx) {
       var el = document.createElement('div'); el.className = 'rr-item' + (it.warn ? ' has-warn' : '');
       var bDistHtml = it.boardingDist ? '<span class="rr-dist-tag">约' + esc(fmtDist(it.boardingDist)) + '</span>' : '';
       var dDistHtml = it.dropoffDist ? '<span class="rr-dist-tag">约' + esc(fmtDist(it.dropoffDist)) + '</span>' : '';
+      var src = it.source || 'yuecx';
+      var srcName = it.sourceName || '粤出行';
+      var badgeHtml = '<span class="rr-source-badge ' + esc(src) + '">' + esc(srcName) + '</span>';
       el.innerHTML =
         '<div class="rr-header">' +
-          '<div class="rr-left"><span class="rr-rank">' + (idx+1) + '</span><span class="rr-time">' + esc(it.time||'') + '</span></div>' +
+          '<div class="rr-left"><span class="rr-rank">' + (idx+1) + '</span><span class="rr-time">' + esc(it.time||'') + '</span>' + badgeHtml + '</div>' +
           '<span class="rr-price">¥' + esc(it.price||'') + '</span>' +
         '</div>' +
         '<div class="rr-body">' +
@@ -607,19 +632,22 @@
 
   function buildBookingCard(info) {
     var card = document.createElement('div'); card.className = 'bk-card';
+    var miniapp = info.miniappName || (info.source === 'busboss' ? '如约城际巴士' : '粤出行城际巴士');
+    var srcName = info.sourceName || (info.source === 'busboss' ? '如约城际' : '粤出行');
     var bodyHtml = '';
     [['路线',info.route],['日期',info.date],['上车',(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||'')],
-     ['下车',info.dropoffStation],['票价',info.priceYuan?'¥'+info.priceYuan:''],['余票',info.residue!=null?info.residue+'张':'']
+     ['下车',info.dropoffStation],['票价',info.priceYuan?'¥'+info.priceYuan:''],['余票',info.residue!=null?info.residue+'张':''],
+     ['来源',srcName]
     ].forEach(function(r){ if(r[1]) bodyHtml += '<div class="bk-row"><span class="bk-label">'+esc(r[0])+'</span><span class="bk-val">'+esc(r[1])+'</span></div>'; });
 
     card.innerHTML =
       '<div class="bk-header">🎫 订票信息</div>' +
       '<div class="bk-body">' + bodyHtml + '</div>' +
       '<div class="bk-actions"><button class="bk-copy">📋 复制订票信息</button></div>' +
-      '<div class="bk-guide">📱 微信搜「<b>粤出行城际巴士</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找 <b>' + esc(info.fromTime||'') + '</b> 班次下单</div>';
+      '<div class="bk-guide">📱 微信搜「<b>' + esc(miniapp) + '</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找 <b>' + esc(info.fromTime||'') + '</b> 班次下单</div>';
 
     var copyBtn = card.querySelector('.bk-copy');
-    var copyText = [info.route,info.date,(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''),'下车: '+(info.dropoffStation||''),'票价: ¥'+(info.priceYuan||'')].join('\n');
+    var copyText = [info.route,info.date,(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''),'下车: '+(info.dropoffStation||''),'票价: ¥'+(info.priceYuan||''),'来源: '+srcName].join('\n');
     copyBtn.addEventListener('click', function() {
       navigator.clipboard.writeText(copyText).then(function() {
         copyBtn.textContent = '✅ 已复制'; copyBtn.classList.add('copied');

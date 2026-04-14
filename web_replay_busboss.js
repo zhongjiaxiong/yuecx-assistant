@@ -19,8 +19,9 @@ const crypto = require("crypto");
 // 配置 (从反编译源码中提取)
 // ============================================================
 const CONFIG = {
-  host: "https://wx.open.class.busboss.cn",
-  cdn: "https://cdn.class.busboss.cn",
+  // 实际 API host (抓包确认): {appid}.dz.busboss.cn
+  host: "https://wx750ee6d5ddf74b19.dz.busboss.cn",
+  cdn: "https://cdn.wx.class.busboss.cn",
   brandList: [
     { name: "如约城际巴士A", appid: "wx750ee6d5ddf74b19" },
     { name: "巴巴站", appid: "wx7323ae957dd0b2d5" },
@@ -28,11 +29,10 @@ const CONFIG = {
     { name: "湛运巴士", appid: "wx987279186735a045" },
     { name: "粤约出行", appid: "wx9ba571ec3b03c48b" },
     { name: "壹号巴士出行", appid: "wx35d237306ef42b65" },
-    // ... 30+ 品牌共享同一套 API
   ],
-  // 需要从小程序抓包获取真实值
-  defaultAppid: "wx750ee6d5ddf74b19", // 如约城际巴士A
-  defaultToken: process.env.BUSBOSS_TOKEN || "", // 从抓包获取
+  defaultAppid: "wx750ee6d5ddf74b19",
+  agentAppId: "rycjbsID",
+  defaultToken: process.env.BUSBOSS_TOKEN || "",
 };
 
 // ============================================================
@@ -48,13 +48,15 @@ async function request(method, path, data = null, headers = {}) {
       "Accept": "application/json",
       "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.0",
       "Referer": `https://servicewechat.com/${CONFIG.defaultAppid}/0/page-frame.html`,
+      "agentappid": CONFIG.agentAppId,
+      "iswxapp": "1",
+      "xweb_xhr": "1",
       ...headers,
     },
   };
 
   if (CONFIG.defaultToken) {
-    opts.headers["Authorization"] = `Bearer ${CONFIG.defaultToken}`;
-    // 或可能是 X-Token, access-token 等，需抓包确认
+    opts.headers["Authorization"] = CONFIG.defaultToken;
   }
 
   if (data && (method === "POST" || method === "PUT")) {
