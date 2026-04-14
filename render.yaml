@@ -24,8 +24,8 @@ services:
         value: qwen-max
       - key: JWT_SECRET
         sync: false  # 在 Dashboard 中设置
-      - key: BAIDU_MAP_AK
-        sync: false  # 在 Dashboard 中设置（可选，不配则无自动定位）
+      - key: AMAP_KEY
+        sync: false  # 在 Dashboard 中设置（高德 Web 服务 Key，可选）
       - key: NODE_ENV
         value: production
       - key: PORT

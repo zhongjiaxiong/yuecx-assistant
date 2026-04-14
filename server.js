@@ -3,7 +3,6 @@
  * POST /api/chat             — 对话接口
  * POST /api/stt              — 语音转文字
  * POST /api/nearby-stations  — 地图定位推荐上车站
- * GET  /api/map-config       — 百度地图 AK
  * POST /api/cron/crawl       — 手动触发广深爬虫
  * GET  /                     — 聊天页面
  * GET  /api/health           — 健康检查
@@ -15,7 +14,7 @@ const path = require("path");
 const multer = require("multer");
 const { chat, buildSystemPrompt } = require("./agent");
 const { crawlHotRoutes, crawlOnDemand } = require("./crawler");
-const baiduMap = require("./baidu-map");
+const gaodeMap = require("./gaode-map");
 const db = require("./db");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -164,10 +163,7 @@ app.post("/api/nearby-stations", async (req, res) => {
     for (const iv of intervals) {
       for (const st of iv.boarding_stations || []) {
         if (!stationMap.has(st.name)) {
-          stationMap.set(st.name, {
-            name: st.name, adcode: st.adcode || "",
-            intervalCount: 0, times: [],
-          });
+          stationMap.set(st.name, { name: st.name, adcode: st.adcode || "", intervalCount: 0, times: [] });
         }
         const entry = stationMap.get(st.name);
         entry.intervalCount++;
@@ -180,55 +176,35 @@ app.post("/api/nearby-stations", async (req, res) => {
       return res.json({ success: true, data: { stations: [], userAddress: null } });
     }
 
+    const coordsMap = await db.getStationCoords(stations.map((s) => s.name));
+    const gcj = gaodeMap.wgs84ToGcj02(latitude, longitude);
+
     let userAddress = null;
-    const stationsOut = [];
-
-    if (baiduMap.isConfigured()) {
+    if (gaodeMap.isConfigured()) {
       try {
-        const geo = await baiduMap.reverseGeocode(latitude, longitude);
+        const geo = await gaodeMap.reverseGeocode(latitude, longitude);
         userAddress = { formatted: geo.formatted, district: geo.district };
-
-        for (const st of stations) {
-          const pois = await baiduMap.searchNearby(st.name, latitude, longitude, 50000);
-          const match = pois.find((p) => p.name.includes(st.name) || st.name.includes(p.name));
-          const distMeters = match
-            ? baiduMap.haversineMeters(latitude, longitude, match.lat, match.lng)
-            : null;
-
-          stationsOut.push({
-            name: st.name,
-            lat: match?.lat || null,
-            lng: match?.lng || null,
-            distanceMeters: distMeters ? Math.round(distMeters) : null,
-            intervalCount: st.intervalCount,
-            timeRange: st.times.length
-              ? `${st.times.sort()[0]}~${st.times.sort().slice(-1)[0]}`
-              : "",
-          });
-        }
       } catch (err) {
-        console.error("[nearby-stations] baidu map error:", err.message);
-        for (const st of stations) {
-          stationsOut.push({
-            name: st.name, lat: null, lng: null, distanceMeters: null,
-            intervalCount: st.intervalCount,
-            timeRange: st.times.length
-              ? `${st.times.sort()[0]}~${st.times.sort().slice(-1)[0]}`
-              : "",
-          });
-        }
-      }
-    } else {
-      for (const st of stations) {
-        stationsOut.push({
-          name: st.name, lat: null, lng: null, distanceMeters: null,
-          intervalCount: st.intervalCount,
-          timeRange: st.times.length
-            ? `${st.times.sort()[0]}~${st.times.sort().slice(-1)[0]}`
-            : "",
-        });
+        console.error("[nearby-stations] reverseGeocode error:", err.message);
       }
     }
+
+    const stationsOut = stations.map((st) => {
+      const coord = coordsMap.get(st.name);
+      const distMeters = coord
+        ? Math.round(gaodeMap.haversineMeters(gcj.lat, gcj.lng, coord.lat, coord.lng))
+        : null;
+      return {
+        name: st.name,
+        lat: coord?.lat || null,
+        lng: coord?.lng || null,
+        distanceMeters: distMeters,
+        intervalCount: st.intervalCount,
+        timeRange: st.times.length
+          ? `${st.times.sort()[0]}~${st.times.sort().slice(-1)[0]}`
+          : "",
+      };
+    });
 
     stationsOut.sort((a, b) => {
       if (a.distanceMeters == null && b.distanceMeters == null) return 0;
@@ -239,22 +215,12 @@ app.post("/api/nearby-stations", async (req, res) => {
 
     res.json({
       success: true,
-      data: {
-        userAddress,
-        userLocation: { latitude, longitude },
-        stations: stationsOut,
-      },
+      data: { userAddress, userLocation: { latitude, longitude }, stations: stationsOut },
     });
   } catch (err) {
     console.error("[nearby-stations] error:", err);
     res.status(500).json({ error: "查询失败" });
   }
-});
-
-// ── 百度地图 AK（供前端使用）──────────────────────────────────
-
-app.get("/api/map-config", (req, res) => {
-  res.json({ ak: process.env.BAIDU_MAP_AK || "" });
 });
 
 // ── 定时爬虫（广深）────────────────────────────────────────────

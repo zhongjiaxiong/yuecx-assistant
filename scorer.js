@@ -1,10 +1,31 @@
 /**
  * 多因子评分引擎
- * 对班次列表进行 时间匹配 / 价格 / 站点就近 / 余票 四维评分排序。
+ * 对班次列表进行 时间 / 价格 / 上车距离 / 下车距离 / 站点关键词 / 余票 六维评分排序。
  * 纯函数，不依赖外部 IO。
  */
 
-const DEFAULT_WEIGHTS = { time: 0.40, price: 0.20, station: 0.25, seat: 0.15 };
+const PI = Math.PI;
+
+function haversine(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => (d * PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function distanceToScore(meters) {
+  if (meters < 1000) return 1.0;
+  if (meters < 3000) return 0.7;
+  if (meters < 5000) return 0.4;
+  if (meters < 10000) return 0.2;
+  return 0.05;
+}
+
+const WEIGHTS_GPS_DEST = { time: 0.20, price: 0.10, boardingDist: 0.25, dropoffDist: 0.20, station: 0.10, seat: 0.15 };
+const WEIGHTS_GPS_ONLY = { time: 0.25, price: 0.15, boardingDist: 0.30, dropoffDist: 0, station: 0.15, seat: 0.15 };
+const WEIGHTS_NO_GPS   = { time: 0.40, price: 0.20, boardingDist: 0, dropoffDist: 0, station: 0.25, seat: 0.15 };
 const TIME_WINDOW = 120;     // depart/arrive 模式窗口（分钟）
 const ASAP_WINDOW = 180;     // asap 模式窗口（分钟）
 const TRIP_ESTIMATE = 150;   // 估算车程（分钟）
@@ -131,13 +152,49 @@ function scoreSeat(residue) {
   return 0.3;
 }
 
+/**
+ * @param {Array} stations boarding/dropoff station list
+ * @param {number} refLat reference latitude (GCJ-02)
+ * @param {number} refLng reference longitude (GCJ-02)
+ * @param {Map} stationCoords Map<stationName, {lat,lng}>
+ * @returns {{ score, nearestStation, nearestStationTime, distanceMeters }}
+ */
+function scoreStationDistance(stations, refLat, refLng, stationCoords) {
+  if (!refLat || !refLng || !stationCoords || stations.length === 0) {
+    return { score: 0, nearestStation: null, nearestStationTime: null, distanceMeters: null };
+  }
+  let best = { dist: Infinity, name: null, time: null };
+  for (const st of stations) {
+    const coord = stationCoords.get(st.name);
+    if (!coord) continue;
+    const d = haversine(refLat, refLng, coord.lat, coord.lng);
+    if (d < best.dist) {
+      best = { dist: d, name: st.name, time: st.arriveTime || "" };
+    }
+  }
+  if (best.dist === Infinity) {
+    return { score: 0, nearestStation: null, nearestStationTime: null, distanceMeters: null };
+  }
+  return {
+    score: distanceToScore(best.dist),
+    nearestStation: best.name,
+    nearestStationTime: best.time,
+    distanceMeters: Math.round(best.dist),
+  };
+}
+
 function scoreAndRank(opts) {
   const {
     intervals, targetTime, timeMode, tripDate,
     preferBoarding = [], preferDropoff = [],
+    userLocation, destLocation, stationCoords,
     weights: customWeights, topN = 5,
   } = opts;
-  const w = { ...DEFAULT_WEIGHTS, ...customWeights };
+
+  const hasGPS = !!(userLocation && userLocation.lat && userLocation.lng);
+  const hasDest = !!(destLocation && destLocation.lat && destLocation.lng);
+  const defaultW = hasGPS ? (hasDest ? WEIGHTS_GPS_DEST : WEIGHTS_GPS_ONLY) : WEIGHTS_NO_GPS;
+  const w = { ...defaultW, ...customWeights };
   const total = intervals.length;
   let filteredSoldOut = 0;
   let filteredPastTime = 0;
@@ -159,20 +216,39 @@ function scoreAndRank(opts) {
     const ivNorm = { ...c.iv, boardingStations: stns, dropoffStations: doff };
     const stResult = scoreStation(ivNorm, preferBoarding, preferDropoff);
     const stScore = Math.max(stResult.score, 0);
-    const final = w.time * c.timeS + w.price * priceScores[i] + w.station * stScore + w.seat * c.seatS;
+
+    const bDist = hasGPS
+      ? scoreStationDistance(stns, userLocation.lat, userLocation.lng, stationCoords)
+      : { score: 0, nearestStation: null, nearestStationTime: null, distanceMeters: null };
+    const dDist = (hasGPS && hasDest)
+      ? scoreStationDistance(doff, destLocation.lat, destLocation.lng, stationCoords)
+      : { score: 0, nearestStation: null, nearestStationTime: null, distanceMeters: null };
+
+    const final =
+      (w.time || 0) * c.timeS +
+      (w.price || 0) * priceScores[i] +
+      (w.boardingDist || 0) * bDist.score +
+      (w.dropoffDist || 0) * dDist.score +
+      (w.station || 0) * stScore +
+      (w.seat || 0) * c.seatS;
+
     return {
       finalScore: Math.round(final * 100) / 100,
       scores: {
         time: Math.round(c.timeS * 100) / 100,
         price: Math.round(priceScores[i] * 100) / 100,
+        boardingDist: Math.round(bDist.score * 100) / 100,
+        dropoffDist: Math.round(dDist.score * 100) / 100,
         station: Math.round(stScore * 100) / 100,
         seat: Math.round(c.seatS * 100) / 100,
       },
       interval: c.iv,
-      matchedBoarding: stResult.matchedBoarding || stns[0]?.name || "",
-      matchedBoardingTime: stResult.matchedBoardingTime || c.iv.from_time || c.iv.fromTime || "",
-      matchedDropoff: stResult.matchedDropoff || doff[0]?.name || "",
-      matchedDropoffTime: stResult.matchedDropoffTime || "",
+      matchedBoarding: bDist.nearestStation || stResult.matchedBoarding || stns[0]?.name || "",
+      matchedBoardingTime: bDist.nearestStationTime || stResult.matchedBoardingTime || c.iv.from_time || c.iv.fromTime || "",
+      matchedDropoff: dDist.nearestStation || stResult.matchedDropoff || doff[0]?.name || "",
+      matchedDropoffTime: dDist.nearestStationTime || stResult.matchedDropoffTime || "",
+      boardingDistMeters: bDist.distanceMeters,
+      dropoffDistMeters: dDist.distanceMeters,
       boardingCandidates: stResult.boardingCandidates,
       dropoffCandidates: stResult.dropoffCandidates,
       dropoffMismatch: stResult.dropoffMismatch,
@@ -188,4 +264,4 @@ function scoreAndRank(opts) {
   };
 }
 
-module.exports = { scoreAndRank, ADCODE_DISTRICT };
+module.exports = { scoreAndRank, haversine, ADCODE_DISTRICT };

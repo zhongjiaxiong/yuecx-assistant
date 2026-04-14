@@ -193,6 +193,55 @@ async function cleanExpired() {
   return rowCount;
 }
 
+// ── Station Coords ──────────────────────────────────────────
+
+async function upsertStationCoord(name, lat, lng, city) {
+  await pool.query(
+    `INSERT INTO station_coords (station_name, lat, lng, city, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (station_name) DO UPDATE SET lat=$2, lng=$3, city=$4, updated_at=NOW()`,
+    [name, lat, lng, city || null]
+  );
+}
+
+async function upsertStationCoordsBatch(coords) {
+  if (!coords.length) return;
+  const BATCH = 50;
+  for (let i = 0; i < coords.length; i += BATCH) {
+    const chunk = coords.slice(i, i + BATCH);
+    const values = [];
+    const phs = [];
+    let idx = 1;
+    for (const c of chunk) {
+      phs.push(`($${idx},$${idx+1},$${idx+2},$${idx+3},NOW())`);
+      values.push(c.name, c.lat, c.lng, c.city || null);
+      idx += 4;
+    }
+    await pool.query(
+      `INSERT INTO station_coords (station_name, lat, lng, city, updated_at)
+       VALUES ${phs.join(",")}
+       ON CONFLICT (station_name) DO UPDATE SET lat=EXCLUDED.lat, lng=EXCLUDED.lng, city=EXCLUDED.city, updated_at=NOW()`,
+      values
+    );
+  }
+}
+
+async function getStationCoords(names) {
+  if (!names.length) return new Map();
+  const { rows } = await pool.query(
+    `SELECT station_name, lat, lng FROM station_coords WHERE station_name = ANY($1)`,
+    [names]
+  );
+  const map = new Map();
+  for (const r of rows) map.set(r.station_name, { lat: r.lat, lng: r.lng });
+  return map;
+}
+
+async function getAllStationNames() {
+  const { rows } = await pool.query(`SELECT station_name FROM station_coords`);
+  return new Set(rows.map((r) => r.station_name));
+}
+
 // ── Migration ───────────────────────────────────────────────
 
 async function migrate() {
@@ -307,6 +356,7 @@ module.exports = {
   upsertCity, findCityByName, getAllCities,
   upsertRoute, getRouteId, getHotRoutes, getAllRoutes, getDestinations, updateRouteLastCrawl,
   upsertIntervals, queryIntervals, getCacheAge, cleanExpired,
+  upsertStationCoord, upsertStationCoordsBatch, getStationCoords, getAllStationNames,
   saveOrder, getOrderById, listOrders, updateOrderStatus,
   migrate, close,
 };

@@ -9,7 +9,7 @@
 const db = require("./db");
 const { scoreAndRank, ADCODE_DISTRICT } = require("./scorer");
 const { requestGETv1, crawlOnDemand } = require("./crawler");
-const baiduMap = require("./baidu-map");
+const gaodeMap = require("./gaode-map");
 
 const CACHE_MAX_MINUTES = parseInt(process.env.CACHE_MAX_MINUTES || "5", 10);
 
@@ -31,18 +31,18 @@ async function getUserLocation(_args, _userId, ctx) {
     return { success: false, needAsk: true, source: "user_input" };
   }
 
-  if (!baiduMap.isConfigured()) {
+  if (!gaodeMap.isConfigured()) {
     return {
       success: true,
       source: "gps_raw",
       latitude: loc.latitude,
       longitude: loc.longitude,
-      hint: "GPS 坐标已获取但百度地图 AK 未配置，无法解析地址。请直接询问用户所在区域。",
+      hint: "GPS 坐标已获取但 AMAP_KEY 未配置，无法解析地址。请直接询问用户所在区域。",
     };
   }
 
   try {
-    const geo = await baiduMap.reverseGeocode(loc.latitude, loc.longitude);
+    const geo = await gaodeMap.reverseGeocode(loc.latitude, loc.longitude);
     return {
       success: true,
       source: "gps",
@@ -153,22 +153,50 @@ function formatInterval(row) {
 
 // ── Tool 4: score_and_rank ──────────────────────────────────
 
-async function scoreAndRankTool(params, userId, _ctx) {
+async function scoreAndRankTool(params, userId, ctx) {
   const { date, startCity, endCity, targetTime, timeMode, preferBoarding, preferDropoff, weights, topN } = params;
   const searchResult = await searchIntervals({ date, startCity, endCity });
   if (!searchResult.success) return { success: false, error: searchResult.error };
 
+  const loc = ctx?.location;
+  let userLocation = null;
+  if (loc && loc.latitude && loc.longitude) {
+    const gcj = gaodeMap.wgs84ToGcj02(loc.latitude, loc.longitude);
+    userLocation = { lat: gcj.lat, lng: gcj.lng };
+  }
+
+  let destLocation = null;
+  if (preferDropoff && preferDropoff.length > 0 && gaodeMap.isConfigured()) {
+    const kw = preferDropoff[0];
+    const isDistrictOnly = Object.values(ADCODE_DISTRICT).includes(kw);
+    if (!isDistrictOnly) {
+      try {
+        destLocation = await gaodeMap.geocode(kw, endCity);
+      } catch (e) {
+        console.warn("[score_and_rank] geocode dest failed:", e.message);
+      }
+    }
+  }
+
+  const allIntervals = searchResult.data.intervals;
+  const allStationNames = new Set();
+  for (const iv of allIntervals) {
+    for (const s of iv.boardingStations || []) allStationNames.add(s.name);
+    for (const s of iv.dropoffStations || []) allStationNames.add(s.name);
+  }
+  const stationCoords = await db.getStationCoords([...allStationNames]);
+
   const result = scoreAndRank({
-    intervals: searchResult.data.intervals,
+    intervals: allIntervals,
+    tripDate: date,
     targetTime, timeMode,
     preferBoarding: preferBoarding || [],
     preferDropoff: preferDropoff || [],
+    userLocation,
+    destLocation,
+    stationCoords,
     weights, topN: topN || 5,
   });
-
-  if (userId) {
-    db.addSearchHistory(userId, { startCity, endCity, travelDate: date }).catch(() => {});
-  }
 
   return {
     success: true,
@@ -316,35 +344,25 @@ async function suggestBoarding({ startCity, endCity, date }, _userId, ctx) {
   const allStations = Array.from(stationMap.values());
   if (allStations.length === 0) return { success: false, error: "该路线暂无上车站数据" };
 
-  if (baiduMap.isConfigured()) {
-    try {
-      const nearbyPois = await baiduMap.searchNearby("巴士站 客运站 地铁站", loc.latitude, loc.longitude, 8000);
+  const stationNames = allStations.map((s) => s.name);
+  const coordsMap = await db.getStationCoords(stationNames);
+  const gcj = gaodeMap.wgs84ToGcj02(loc.latitude, loc.longitude);
 
-      for (const st of allStations) {
-        let bestDist = Infinity;
-        for (const poi of nearbyPois) {
-          if (st.name.includes(poi.name) || poi.name.includes(st.name)) {
-            bestDist = Math.min(bestDist, poi.distance || Infinity);
+  for (const st of allStations) {
+    const coord = coordsMap.get(st.name);
+    if (coord) {
+      st.estimatedDistance = Math.round(gaodeMap.haversineMeters(gcj.lat, gcj.lng, coord.lat, coord.lng));
+    } else {
+      const distName = ADCODE_DISTRICT[st.adcode];
+      if (gaodeMap.isConfigured()) {
+        try {
+          const geo = await gaodeMap.reverseGeocode(loc.latitude, loc.longitude);
+          if (distName && distName === geo.district) {
+            st.estimatedDistance = 5000;
+            st.sameDistrict = true;
           }
-        }
-        st.estimatedDistance = bestDist === Infinity ? null : bestDist;
+        } catch (_) { /* ignore */ }
       }
-
-      const geo = await baiduMap.reverseGeocode(loc.latitude, loc.longitude);
-      const userDistrict = geo.district;
-      if (userDistrict) {
-        for (const st of allStations) {
-          if (st.estimatedDistance === null) {
-            const distName = ADCODE_DISTRICT[st.adcode];
-            if (distName && distName === userDistrict) {
-              st.estimatedDistance = 5000;
-              st.sameDistrict = true;
-            }
-          }
-        }
-      }
-    } catch (err) {
-      console.error("[suggest_boarding] baidu map error:", err.message);
     }
   }
 
@@ -394,7 +412,7 @@ const TOOL_SCHEMAS = [
   { type: "function", function: { name: "get_user_location", description: "获取用户当前 GPS 位置并解析为结构化地址（城市、区、街道、附近地标）。如果用户已授权浏览器定位则返回精确位置，否则返回 needAsk=true 表示需要口头询问。", parameters: { type: "object", properties: {}, required: [] } } },
   { type: "function", function: { name: "list_cities", description: "列出所有支持的出发城市，或查询某个城市可达的目的地列表。", parameters: { type: "object", properties: { startCity: { type: "string", description: "可选。指定出发城市名，查询其可达目的地。不传则返回所有城市。" } }, required: [] } } },
   { type: "function", function: { name: "search_intervals", description: "实时查询指定日期和路线的所有可用班次。", parameters: { type: "object", properties: { date: { type: "string", description: "出行日期 YYYY-MM-DD" }, startCity: { type: "string", description: "出发城市名" }, endCity: { type: "string", description: "到达城市名" } }, required: ["date", "startCity", "endCity"] } } },
-  { type: "function", function: { name: "score_and_rank", description: "对指定日期路线的班次综合评分排序。基于时间、价格、站点就近、余票四维度。", parameters: { type: "object", properties: { date: { type: "string", description: "出行日期 YYYY-MM-DD" }, startCity: { type: "string", description: "出发城市名" }, endCity: { type: "string", description: "到达城市名" }, targetTime: { type: "string", description: "期望时间 HH:MM" }, timeMode: { type: "string", enum: ["depart", "arrive", "asap"], description: "时间模式" }, preferBoarding: { type: "array", items: { type: "string" }, description: "偏好上车站关键词" }, preferDropoff: { type: "array", items: { type: "string" }, description: "偏好下车站关键词" }, weights: { type: "object", properties: { time: { type: "number" }, price: { type: "number" }, station: { type: "number" }, seat: { type: "number" } }, description: "权重" }, topN: { type: "number", description: "返回前 N 个，默认 5" } }, required: ["date", "startCity", "endCity", "targetTime", "timeMode"] } } },
+  { type: "function", function: { name: "score_and_rank", description: "对指定日期路线的班次综合评分排序。有GPS时自动按上车距离排序；如用户说了目的地关键词(如'天河体育中心')，传入preferDropoff会自动geocode并按下车距离排序。六维度: 时间/价格/上车距离/下车距离/站点关键词/余票。", parameters: { type: "object", properties: { date: { type: "string", description: "出行日期 YYYY-MM-DD" }, startCity: { type: "string", description: "出发城市名" }, endCity: { type: "string", description: "到达城市名" }, targetTime: { type: "string", description: "期望时间 HH:MM" }, timeMode: { type: "string", enum: ["depart", "arrive", "asap"], description: "时间模式" }, preferBoarding: { type: "array", items: { type: "string" }, description: "偏好上车站关键词" }, preferDropoff: { type: "array", items: { type: "string" }, description: "偏好下车站关键词或目的地地标(如'天河体育中心')，系统会自动geocode计算距离" }, topN: { type: "number", description: "返回前 N 个，默认 5" } }, required: ["date", "startCity", "endCity", "targetTime", "timeMode"] } } },
   { type: "function", function: { name: "verify_realtime", description: "实时查询指定班次最新余票和状态。", parameters: { type: "object", properties: { date: { type: "string", description: "日期" }, startCity: { type: "string", description: "出发城市" }, endCity: { type: "string", description: "到达城市" }, intervalId: { type: "string", description: "班次 ID" } }, required: ["date", "startCity", "endCity", "intervalId"] } } },
   { type: "function", function: { name: "refresh_cache", description: "强制刷新指定路线的数据。", parameters: { type: "object", properties: { startCity: { type: "string", description: "出发城市" }, endCity: { type: "string", description: "到达城市" }, days: { type: "number", description: "天数，默认 3" } }, required: ["startCity", "endCity"] } } },
   { type: "function", function: { name: "book_interval", description: "为用户生成指定班次的订票跳转链接。用户可点击链接直接跳转到小程序填单页完成购票。", parameters: { type: "object", properties: { date: { type: "string", description: "出行日期 YYYY-MM-DD" }, startCity: { type: "string", description: "出发城市名" }, endCity: { type: "string", description: "到达城市名" }, intervalId: { type: "string", description: "班次 ID" }, boardingStationName: { type: "string", description: "偏好的上车站名称（可选，模糊匹配）" }, dropoffStationName: { type: "string", description: "偏好的下车站名称（可选，模糊匹配）" } }, required: ["date", "startCity", "endCity", "intervalId"] } } },

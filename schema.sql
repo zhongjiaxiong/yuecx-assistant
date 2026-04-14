@@ -87,3 +87,13 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at DESC);
+
+-- 站点坐标缓存（GCJ-02 坐标系，高德/国标）
+CREATE TABLE IF NOT EXISTS station_coords (
+  station_name  TEXT PRIMARY KEY,
+  lat           DOUBLE PRECISION NOT NULL,
+  lng           DOUBLE PRECISION NOT NULL,
+  city          TEXT,
+  source        TEXT DEFAULT 'gaode',
+  updated_at    TIMESTAMPTZ DEFAULT NOW()
+);

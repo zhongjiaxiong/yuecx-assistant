@@ -6,6 +6,7 @@
 require("dotenv/config");
 const crypto = require("crypto");
 const db = require("./db");
+const gaodeMap = require("./gaode-map");
 
 const HOST = process.env.YUECX_HOST || "https://15676888-api.ylxweb.com";
 const CORP_ID = process.env.YUECX_CORP_ID || "ycx";
@@ -249,7 +250,67 @@ async function crawlHotRoutes() {
   }
   await db.cleanExpired().catch(() => {});
   console.log(`[cron] 抓取完成, 共 ${totalCount} 条班次`);
+
+  await geocodeMissingStations().catch((e) => console.error("[cron] geocode站点失败:", e.message));
+
   return totalCount;
+}
+
+/**
+ * 从 intervals 表提取所有站点名，对缺少坐标的用高德 geocode 并写入 DB。
+ */
+async function geocodeMissingStations() {
+  if (!gaodeMap.isConfigured()) {
+    console.warn("[geocode] AMAP_KEY 未配置，跳过站点坐标同步");
+    return;
+  }
+  const { rows } = await db.pool.query(
+    `SELECT DISTINCT station_name, city FROM (
+       SELECT jsonb_array_elements(boarding_stations)->>'name' AS station_name,
+              c1.city_name AS city
+       FROM intervals i
+       JOIN routes r ON i.route_id = r.id
+       JOIN cities c1 ON r.start_city_id = c1.city_id
+       WHERE i.take_date >= CURRENT_DATE
+       UNION
+       SELECT jsonb_array_elements(dropoff_stations)->>'name' AS station_name,
+              c2.city_name AS city
+       FROM intervals i
+       JOIN routes r ON i.route_id = r.id
+       JOIN cities c2 ON r.end_city_id = c2.city_id
+       WHERE i.take_date >= CURRENT_DATE
+     ) sub WHERE station_name IS NOT NULL AND station_name <> ''`
+  );
+  if (!rows.length) return;
+
+  const existing = await db.getAllStationNames();
+  const missing = rows.filter((r) => !existing.has(r.station_name));
+  if (!missing.length) {
+    console.log("[geocode] 所有站点已有坐标");
+    return;
+  }
+  console.log(`[geocode] ${missing.length} 个站点需要查坐标`);
+
+  const toInsert = [];
+  for (const { station_name, city } of missing) {
+    try {
+      const coord = await gaodeMap.searchStationCoord(station_name, city);
+      if (coord) {
+        toInsert.push({ name: station_name, lat: coord.lat, lng: coord.lng, city });
+        console.log(`[geocode] ${station_name} → ${coord.lat},${coord.lng}`);
+      } else {
+        console.warn(`[geocode] ${station_name} 未找到坐标`);
+      }
+    } catch (e) {
+      console.warn(`[geocode] ${station_name} 查询失败:`, e.message);
+    }
+    await sleep(200);
+  }
+
+  if (toInsert.length) {
+    await db.upsertStationCoordsBatch(toInsert);
+    console.log(`[geocode] 写入 ${toInsert.length} 个站点坐标`);
+  }
 }
 
 module.exports = { requestGETv1, getChallengeHeaders, crawlOnDemand, syncMeta, crawlHotRoutes };

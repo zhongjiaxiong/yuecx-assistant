@@ -742,9 +742,10 @@
 
   function initLeafletMap(center, zoom) {
     var map = L.map(mapContainer).setView(center, zoom);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
       maxZoom: 18,
-      attribution: '&copy; OpenStreetMap',
+      subdomains: '1234',
+      attribution: '&copy; 高德地图',
     }).addTo(map);
     currentMap = map;
     return map;
