@@ -110,51 +110,52 @@ async function searchIntervals({ date, startCity, endCity }) {
   const allEndRows = await db.findCityByName(endCity);
   if (allEndRows.length === 0) return { success: false, error: `未找到到达城市: ${endCity}` };
 
-  const ylxStart = allCityRows.find((r) => r.source === "yuecx");
-  const ylxEnd = allEndRows.find((r) => r.source === "yuecx");
+  const ylxStarts = allCityRows.filter((r) => r.source === "yuecx");
+  const ylxEnds = allEndRows.filter((r) => r.source === "yuecx");
   const bbStart = allCityRows.find((r) => r.source === "busboss");
   const bbEnd = allEndRows.find((r) => r.source === "busboss");
 
-  const displayStartName = (ylxStart || bbStart || allCityRows[0]).city_name;
-  const displayEndName = (ylxEnd || bbEnd || allEndRows[0]).city_name;
+  const displayStartName = (ylxStarts[0] || bbStart || allCityRows[0]).city_name;
+  const displayEndName = (ylxEnds[0] || bbEnd || allEndRows[0]).city_name;
 
-  const tasks = [];
-  const sources = [];
-
-  // 亿路行源
-  if (ylxStart && ylxEnd) {
-    tasks.push(fetchYlxIntervals(ylxStart.city_id, ylxEnd.city_id, date));
-    sources.push("yuecx");
+  let ylxIntervals = [];
+  if (ylxStarts.length > 0 && ylxEnds.length > 0) {
+    for (const s of ylxStarts) {
+      for (const e of ylxEnds) {
+        try {
+          const ivs = await fetchYlxIntervals(s.city_id, e.city_id, date);
+          if (ivs.length > 0) {
+            ylxIntervals = ivs;
+            break;
+          }
+        } catch (err) {
+          console.warn(`[search] ylx ${s.city_id}->${e.city_id} failed:`, err.message);
+        }
+      }
+      if (ylxIntervals.length > 0) break;
+    }
   }
 
-  // 车盈网源
+  let bbIntervals = [];
   if (bbStart && bbEnd) {
     const token = await getValidToken();
     if (token) {
-      tasks.push(fetchBusbossIntervalsSafe(bbStart.city_id, bbEnd.city_id, date));
-      sources.push("busboss");
+      try {
+        bbIntervals = await fetchBusbossIntervalsSafe(bbStart.city_id, bbEnd.city_id, date);
+      } catch (err) {
+        console.error(`[search] busboss failed:`, err.message);
+      }
     }
   }
 
-  if (tasks.length === 0) {
+  const allIntervals = [...ylxIntervals, ...bbIntervals];
+  if (allIntervals.length === 0 && ylxStarts.length === 0 && !bbStart) {
     return { success: false, error: `不支持的路线: ${displayStartName}->${displayEndName}` };
   }
 
-  const results = await Promise.allSettled(tasks);
-  let allIntervals = [];
   const sourceStats = {};
-
-  for (let i = 0; i < results.length; i++) {
-    const src = sources[i];
-    if (results[i].status === "fulfilled") {
-      const ivs = results[i].value;
-      sourceStats[src] = ivs.length;
-      allIntervals.push(...ivs);
-    } else {
-      console.error(`[search] ${src} 查询失败:`, results[i].reason?.message);
-      sourceStats[src] = 0;
-    }
-  }
+  if (ylxIntervals.length > 0) sourceStats.yuecx = ylxIntervals.length;
+  if (bbIntervals.length > 0) sourceStats.busboss = bbIntervals.length;
 
   allIntervals.sort((a, b) => (a.from_time || "").localeCompare(b.from_time || ""));
 
@@ -163,8 +164,8 @@ async function searchIntervals({ date, startCity, endCity }) {
     data: {
       date,
       route: `${displayStartName}->${displayEndName}`,
-      startCityId: ylxStart?.city_id || bbStart?.city_id,
-      endCityId: ylxEnd?.city_id || bbEnd?.city_id,
+      startCityId: ylxStarts[0]?.city_id || bbStart?.city_id,
+      endCityId: ylxEnds[0]?.city_id || bbEnd?.city_id,
       startCityName: displayStartName,
       endCityName: displayEndName,
       intervalCount: allIntervals.length,
