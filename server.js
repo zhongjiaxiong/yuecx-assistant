@@ -23,8 +23,10 @@ const express = require("express");
 const path = require("path");
 const multer = require("multer");
 const { chat, buildSystemPrompt } = require("./agent");
+const { crawlHotRoutes } = require("./crawler");
 const order = require("./order");
-const busboss = require("./busboss_crawler");
+let busboss;
+try { busboss = require("./busboss_crawler"); } catch { busboss = { isAvailable: () => false }; }
 const stripePayment = require("./stripe-payment");
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -352,6 +354,37 @@ app.post("/webhook/stripe",
   stripePayment.buildWebhookHandler(order)
 );
 
+// ── 定时爬虫（广深）────────────────────────────────────────────
+
+/** POST /api/cron/crawl — 手动触发广深爬虫 */
+app.post("/api/cron/crawl", async (req, res) => {
+  const secret = req.headers["x-cron-secret"] || req.query.secret;
+  if (process.env.CRON_SECRET && secret !== process.env.CRON_SECRET) {
+    return res.status(403).json({ error: "forbidden" });
+  }
+  res.json({ status: "started" });
+  crawlHotRoutes().catch((e) => console.error("[cron] manual trigger error:", e.message));
+});
+
+function msUntilBeijing(hour, minute) {
+  const now = new Date();
+  const bj = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+  const target = new Date(bj);
+  target.setHours(hour, minute, 0, 0);
+  if (target <= bj) target.setDate(target.getDate() + 1);
+  return target - bj;
+}
+
+function scheduleDailyCrawl() {
+  const run = () => {
+    crawlHotRoutes().catch((e) => console.error("[cron] daily error:", e.message));
+    setTimeout(run, msUntilBeijing(6, 0));
+  };
+  const delay = msUntilBeijing(6, 0);
+  console.log(`[cron] 下次广深定时抓取: ${Math.round(delay / 60000)} 分钟后`);
+  setTimeout(run, delay);
+}
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
@@ -361,5 +394,13 @@ app.listen(PORT, () => {
   console.log(`  - GET  /api/orders       订单列表`);
   console.log(`  - GET  /api/orders/stats 订单统计`);
   console.log(`  - POST /api/orders/:orderId/pay  Stripe支付`);
+  console.log(`  - POST /api/cron/crawl   手动触发广深爬虫`);
   console.log(`  - GET  /api/health       健康检查`);
+
+  // 启动时预热：立即抓取广深数据
+  console.log("[cron] 服务启动，开始预热广深数据...");
+  crawlHotRoutes().catch((e) => console.error("[cron] startup crawl error:", e.message));
+
+  // 每天北京时间 6:00 定时抓取
+  scheduleDailyCrawl();
 });

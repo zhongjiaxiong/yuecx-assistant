@@ -1,0 +1,80 @@
+name: 每日广深班次抓取
+
+on:
+  schedule:
+    # 每天北京时间 6:00, 12:00, 18:00 运行 (UTC+8)
+    - cron: '0 22 * * *'  # 06:00 UTC+8
+    - cron: '0 4 * * *'   # 12:00 UTC+8
+    - cron: '0 10 * * *'  # 18:00 UTC+8
+  workflow_dispatch:  # 支持手动触发
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: 抓取广深未来15天数据
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          YUECX_HOST: ${{ secrets.YUECX_HOST || 'https://15676888-api.ylxweb.com' }}
+          YUECX_CORP_ID: ${{ secrets.YUECX_CORP_ID || 'ycx' }}
+          YUECX_APPID: ${{ secrets.YUECX_APPID || 'wx44d254291f27af7c' }}
+        run: node -e "
+          require('dotenv/config');
+          const { crawlOnDemand } = require('./crawler');
+          const db = require('./db');
+
+          async function crawlGuangzhouShenzhen() {
+            const startCityId = '020';      // 广州
+            const endCityId = '440300';      // 深圳
+            const days = 15;
+            
+            console.log('[cron] 开始抓取广深线，未来', days, '天');
+            console.time('total');
+            
+            let totalCount = 0;
+            const today = new Date();
+            
+            for (let i = 0; i < days; i++) {
+              const date = new Date(today);
+              date.setDate(today.getDate() + i);
+              const dateStr = date.toISOString().slice(0, 10);
+              
+              console.log(\`[cron] 抓取 \${dateStr}...\`);
+              try {
+                const intervals = await crawlOnDemand(startCityId, endCityId, dateStr);
+                console.log(\`[cron] \${dateStr}: \${intervals.length} 条班次\`);
+                totalCount += intervals.length;
+              } catch (err) {
+                console.error(\`[cron] \${dateStr} 失败: \`, err.message);
+              }
+              
+              // 避免请求过快
+              if (i < days - 1) await new Promise(r => setTimeout(r, 500));
+            }
+            
+            console.timeEnd('total');
+            console.log('[cron] 总计抓取:', totalCount, '条班次');
+            await db.close();
+          }
+
+          crawlGuangzhouShenzhen().then(() => {
+            process.exit(0);
+          }).catch(err => {
+            console.error('[cron] 致命错误:', err);
+            process.exit(1);
+          });
+        "

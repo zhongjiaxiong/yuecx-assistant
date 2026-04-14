@@ -206,7 +206,53 @@ async function crawlOnDemand(startCityId, endCityId, date) {
   return intervals;
 }
 
-module.exports = { requestGETv1, getChallengeHeaders, crawlOnDemand, syncMeta };
+// ── 广深热门路线定时抓取 ──────────────────────────────────────
+
+const HOT_ROUTES = [
+  { startCityId: "020", endCityId: "440300", label: "广州→深圳" },
+  { startCityId: "440300", endCityId: "020", label: "深圳→广州" },
+];
+const CRAWL_DAYS = 15;
+
+function formatDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function nowBeijing() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+}
+
+async function crawlHotRoutes() {
+  const today = nowBeijing();
+  console.log(`[cron] 开始抓取广深热门路线 (${formatDate(today)}, ${CRAWL_DAYS}天)`);
+  let totalCount = 0;
+
+  for (const route of HOT_ROUTES) {
+    const routeId = await resolveRouteId(route.startCityId, route.endCityId);
+    for (let i = 0; i < CRAWL_DAYS; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() + i);
+      const date = formatDate(d);
+      try {
+        const intervals = await fetchRouteDayDirect(routeId, route.startCityId, route.endCityId, date);
+        totalCount += intervals.length;
+        if (routeId && intervals.length > 0) {
+          for (const iv of intervals) iv.route_id = routeId;
+          await db.upsertIntervals(intervals);
+        }
+        console.log(`[cron] ${route.label} ${date}: ${intervals.length} 班次`);
+      } catch (err) {
+        console.error(`[cron] ${route.label} ${date} 失败:`, err.message);
+      }
+      await sleep(500);
+    }
+  }
+  await db.cleanExpired().catch(() => {});
+  console.log(`[cron] 抓取完成, 共 ${totalCount} 条班次`);
+  return totalCount;
+}
+
+module.exports = { requestGETv1, getChallengeHeaders, crawlOnDemand, syncMeta, crawlHotRoutes };
 
 // ── CLI ─────────────────────────────────────────────────────
 
