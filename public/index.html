@@ -38,12 +38,37 @@
     display: flex; align-items: center; justify-content: center; font-size: 18px; background: #e8e8e8;
   }
   .msg.user .avatar { background: var(--green); color: #fff; }
-  .typing .bubble::after {
-    content: ''; display: inline-block; width: 6px; height: 6px;
-    background: #999; border-radius: 50%; margin-left: 4px; animation: blink 1s infinite;
-  }
-  @keyframes blink { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+
+  /* Step Progress Indicator */
+  .step-bar { display: flex; align-items: center; gap: 0; padding: 2px 0; }
+  .step-item { display: flex; align-items: center; gap: 0; }
+  .step-dot {
+    width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; transition: all .3s ease;
+    background: #e8e8e8; color: #bbb;
+  }
+  .step-dot.active {
+    background: var(--green); color: #fff;
+    animation: stepPulse 1.2s ease-in-out infinite;
+  }
+  .step-dot.done { background: var(--green); color: #fff; }
+  .step-label {
+    font-size: 12px; color: #bbb; margin-left: 4px; white-space: nowrap;
+    transition: color .3s ease;
+  }
+  .step-label.active { color: var(--green); font-weight: 600; }
+  .step-label.done { color: #999; }
+  .step-line {
+    width: 16px; height: 2px; background: #e0e0e0; margin: 0 2px; flex-shrink: 0;
+    transition: background .3s ease;
+  }
+  .step-line.done { background: var(--green); }
+  @keyframes stepPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(7,193,96,0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(7,193,96,0); }
+  }
   .hint { text-align: center; color: #999; font-size: 12px; padding: 8px 0 4px; }
 
   /* Input Bar */
@@ -624,27 +649,63 @@
 
   function autoGrow() { inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px'; }
 
-  var STEP_LABELS = {
-    thinking: '思考中',
-    locating: '定位中',
-    searching: '查询班次',
-    ranking: '智能排序',
-    booking: '订票处理中',
-    processing: '处理中'
-  };
+  var STEP_DEFS = [
+    { key: 'thinking', icon: '💭', label: '思考' },
+    { key: 'locating', icon: '📍', label: '定位' },
+    { key: 'searching', icon: '🔍', label: '查询' },
+    { key: 'done', icon: '✅', label: '完成' }
+  ];
+  var STEP_ALIAS = { ranking: 'searching', processing: 'searching', booking: 'searching' };
 
-  function updateTypingStep(step) {
+  function buildStepBar() {
+    var html = '<div class="step-bar">';
+    STEP_DEFS.forEach(function(s, i) {
+      if (i > 0) html += '<div class="step-line" data-after="' + s.key + '"></div>';
+      html += '<div class="step-item"><div class="step-dot" data-step="' + s.key + '">' + s.icon + '</div>';
+      html += '<span class="step-label" data-step="' + s.key + '">' + s.label + '</span></div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
+  var currentStepIdx = -1;
+
+  function updateTypingStep(rawStep) {
+    var step = STEP_ALIAS[rawStep] || rawStep;
     var el = document.getElementById('chat-typing');
     if (!el) return;
-    var bubble = el.querySelector('.bubble');
-    if (bubble) bubble.textContent = STEP_LABELS[step] || step;
+    var idx = -1;
+    for (var i = 0; i < STEP_DEFS.length; i++) {
+      if (STEP_DEFS[i].key === step) { idx = i; break; }
+    }
+    if (idx < 0 || idx <= currentStepIdx) return;
+    currentStepIdx = idx;
+
+    STEP_DEFS.forEach(function(s, i) {
+      var dot = el.querySelector('.step-dot[data-step="' + s.key + '"]');
+      var lbl = el.querySelector('.step-label[data-step="' + s.key + '"]');
+      var line = el.querySelector('.step-line[data-after="' + s.key + '"]');
+      if (!dot) return;
+      dot.classList.remove('active', 'done');
+      lbl.classList.remove('active', 'done');
+      if (line) line.classList.remove('done');
+      if (i < idx) {
+        dot.classList.add('done'); lbl.classList.add('done');
+        if (line) line.classList.add('done');
+      } else if (i === idx) {
+        dot.classList.add('active'); lbl.classList.add('active');
+        if (line) line.classList.add('done');
+      }
+    });
     scrollBottom();
   }
 
   async function doChat(text) {
-    var typDiv = document.createElement('div'); typDiv.className = 'msg bot typing'; typDiv.id = 'chat-typing';
-    typDiv.innerHTML = '<div class="avatar">🚌</div><div class="bubble">思考中</div>';
+    currentStepIdx = -1;
+    var typDiv = document.createElement('div'); typDiv.className = 'msg bot'; typDiv.id = 'chat-typing';
+    typDiv.innerHTML = '<div class="avatar">🚌</div><div class="bubble">' + buildStepBar() + '</div>';
     messagesEl.appendChild(typDiv); scrollBottom();
+    updateTypingStep('thinking');
 
     try {
       var controller = new AbortController();

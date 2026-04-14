@@ -142,15 +142,18 @@ async function chat(messages, userId, ctx, onProgress) {
       return msg.content || "";
     }
 
-    for (const tc of msg.tool_calls) {
-      const step = TOOL_STEP_MAP[tc.function.name] || "processing";
-      if (onProgress) onProgress(step);
+    const toolCalls = msg.tool_calls;
+    const uniqueSteps = [...new Set(toolCalls.map(tc => TOOL_STEP_MAP[tc.function.name] || "processing"))];
+    for (const step of uniqueSteps) { if (onProgress) onProgress(step); }
 
+    const toolResults = await Promise.all(toolCalls.map(async (tc) => {
       const args = typeof tc.function.arguments === "string"
         ? JSON.parse(tc.function.arguments)
         : tc.function.arguments;
-      const toolResult = await executeTool(tc.function.name, args, userId, ctx);
-      messages.push({ role: "tool", tool_call_id: tc.id, content: toolResult });
+      return { id: tc.id, content: await executeTool(tc.function.name, args, userId, ctx) };
+    }));
+    for (const tr of toolResults) {
+      messages.push({ role: "tool", tool_call_id: tr.id, content: tr.content });
     }
 
     if (onProgress) onProgress("thinking");

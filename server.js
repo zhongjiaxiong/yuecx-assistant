@@ -60,6 +60,20 @@ app.post("/api/chat", async (req, res) => {
 
   if (location && location.latitude && location.longitude) {
     session.location = { latitude: location.latitude, longitude: location.longitude };
+
+    if (!session.locationResolved && gaodeMap.isConfigured()) {
+      try {
+        const geo = await gaodeMap.reverseGeocode(location.latitude, location.longitude);
+        session.locationResolved = {
+          city: geo.city, district: geo.district, street: geo.street,
+          formatted: geo.formatted, adcode: geo.adcode,
+        };
+        const locInfo = `[系统自动定位] 用户当前位置: ${geo.city}${geo.district}${geo.street || ""}（${geo.formatted}）。GPS坐标已注入context，调 score_and_rank 时系统会自动计算上车距离，无需再调 get_user_location。`;
+        session.messages.push({ role: "system", content: locInfo });
+      } catch (e) {
+        console.error("[pre-resolve] reverseGeocode error:", e.message);
+      }
+    }
   }
 
   session.messages.push({ role: "user", content: message });
