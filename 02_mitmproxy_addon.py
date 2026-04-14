@@ -111,7 +111,7 @@ def response(flow: http.HTTPFlow):
     # 实时日志
     platform_tag = entry["platform"]
     ctx.log.info(
-        f"[{platform_tag}] {req.method} {req.pretty_host}{req.path} -> {resp.status_code if resp else '?'}}"
+        f"[{platform_tag}] {req.method} {req.pretty_host}{req.path} -> {resp.status_code if resp else '?'}"
     )
 
     # 保存到文件

@@ -15,7 +15,6 @@
     "dotenv": "^17.4.2",
     "express": "^4.21.0",
     "formdata-node": "^6.0.3",
-    "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "pg": "^8.13.0",
     "stripe": "^22.0.1"

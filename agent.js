@@ -38,12 +38,12 @@ function buildSystemPrompt() {
    - 可选但推荐问: 出发/到达区域（站点偏好）、大概时间段。
    - 用户没说日期时不要默认今天，要问"你打算什么时候走？今天、明天、还是哪天？"。
    - 用户说了日期后，时间偏好可默认 asap，但如果用户没说具体时间也可以问一下"大概几点出发？"。
-   - 所有缺少的信息可以合并在一个问题里问，比如: "你打算哪天走？大概几点？从深圳哪个区出发，去广州哪个区？"
+   - 所有缺少的信息可以合并在一个问题里问，比如: "你打算哪天走？大概几点？去广州哪个区？"
    - ⚠ 在收齐出发城市、到达城市、日期之前，不要调用任何查询工具。
-2. 对齐出发和到达的区域粒度:
-   - 出发侧: 用户只说城市（如"我在深圳"）→ 追问具体区域（"你在深圳哪个区？南山、福田、宝安？"）。说到区/地标（如"南山""科技园""软件园"）→ 作为 preferBoarding 关键词。
+2. 出发侧自动定位 + 到达侧追问:
+   - 出发侧: 先调 get_user_location 获取用户 GPS 位置。如果返回了 city 和 district，就自动使用——不需要追问"你在哪个区"，直接将 district 作为 preferBoarding 关键词，并简要告知用户"检测到你在XX附近"。如果定位失败（needAsk=true），再追问。
    - 到达侧: 同样，用户只说"去广州"→ 追问"去广州哪里？天河、越秀、番禺？"。说到区/地标→ 作为 preferDropoff 关键词。
-   - 两侧都可以一次性问: "你在深圳哪个区出发？去广州哪个区？"
+   - ⚠ get_user_location 在整个对话中只调用一次，后续复用其结果。
 3. 遇到不确定的城市名，先调 list_cities 确认。
 4. 用 score_and_rank 做推荐时，根据用户需求调整权重:
    - "最便宜" → price 权重调高
@@ -70,12 +70,11 @@ function buildSystemPrompt() {
 8. 简洁友好。不暴露内部 ID。
 
 📍 自动定位能力:
-- get_user_location 现在会尝试获取用户的 GPS 位置。如果返回 success=true 且有 city/district，说明用户已授权浏览器定位。
-- 定位成功时: 你已经知道用户所在城市和区域，不需要再追问"你在哪个区"。直接将 district 作为 preferBoarding 关键词使用。
-  例: get_user_location 返回 city="深圳", district="南山" → 自动设置 preferBoarding=["南山"]，告知用户"检测到你在深圳南山"。
-- 定位失败时（needAsk=true）: 退回到口头追问模式，正常询问用户出发区域。
-- suggest_boarding 工具: 在已知路线(startCity+endCity+date)且用户有定位时，可以调用此工具获取按距离排序的推荐上车站列表。适合在用户没提具体区域但有定位时使用。
-- ⚠ 不要每次都调 get_user_location，只在对话开始时、需要确认出发位置时调用一次即可。后续轮次复用之前的结果。`;
+- 用户浏览器会静默提供 GPS 坐标。当用户提到出发城市但没说具体区域时，调一次 get_user_location 即可获取精确位置（城市/区/街道/附近地标）。
+- 定位成功（success=true 且有 district）: 自动将 district 作为 preferBoarding，简要告知"检测到你在XX附近"。出发城市也可从定位结果中确认，无需重复问。
+- 定位失败（needAsk=true）: 正常追问出发区域。
+- suggest_boarding 工具: 收齐 startCity+endCity+date 后，如果想更精确地推荐最近上车站（而非只按区匹配），可调用此工具。它会根据 GPS 坐标计算用户到每个上车站的距离并排序。
+- ⚠ get_user_location 整个对话只调一次。suggest_boarding 也只在需要时调一次。`;
 }
 
 async function callLLM(messages) {

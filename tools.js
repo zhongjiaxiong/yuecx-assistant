@@ -7,7 +7,7 @@
  */
 
 const db = require("./db");
-const { scoreAndRank } = require("./scorer");
+const { scoreAndRank, ADCODE_DISTRICT } = require("./scorer");
 const { requestGETv1, crawlOnDemand } = require("./crawler");
 const baiduMap = require("./baidu-map");
 
@@ -283,7 +283,7 @@ async function bookInterval({ date, startCity, endCity, intervalId, boardingStat
   };
 }
 
-// ── Tool 8: suggest_boarding ─────────────────────────────
+// ── Tool 8: suggest_boarding ─────────────────────────────────
 
 async function suggestBoarding({ startCity, endCity, date }, _userId, ctx) {
   const loc = ctx?.location;
@@ -316,7 +316,6 @@ async function suggestBoarding({ startCity, endCity, date }, _userId, ctx) {
   const allStations = Array.from(stationMap.values());
   if (allStations.length === 0) return { success: false, error: "该路线暂无上车站数据" };
 
-  let recommendations;
   if (baiduMap.isConfigured()) {
     try {
       const nearbyPois = await baiduMap.searchNearby("巴士站 客运站 地铁站", loc.latitude, loc.longitude, 8000);
@@ -334,7 +333,6 @@ async function suggestBoarding({ startCity, endCity, date }, _userId, ctx) {
       const geo = await baiduMap.reverseGeocode(loc.latitude, loc.longitude);
       const userDistrict = geo.district;
       if (userDistrict) {
-        const { ADCODE_DISTRICT } = require("./scorer");
         for (const st of allStations) {
           if (st.estimatedDistance === null) {
             const distName = ADCODE_DISTRICT[st.adcode];
@@ -350,10 +348,10 @@ async function suggestBoarding({ startCity, endCity, date }, _userId, ctx) {
     }
   }
 
-  const withDist = allStations.filter((s) => s.estimatedDistance !== null);
-  const noDist = allStations.filter((s) => s.estimatedDistance === null);
+  const withDist = allStations.filter((s) => s.estimatedDistance != null);
+  const noDist = allStations.filter((s) => s.estimatedDistance == null);
   withDist.sort((a, b) => a.estimatedDistance - b.estimatedDistance);
-  recommendations = [...withDist, ...noDist].slice(0, 5);
+  const recommendations = [...withDist, ...noDist].slice(0, 5);
 
   return {
     success: true,

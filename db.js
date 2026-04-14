@@ -193,124 +193,6 @@ async function cleanExpired() {
   return rowCount;
 }
 
-// ── Users ────────────────────────────────────────────────────
-
-async function findUserByOpenid(openid) {
-  const { rows } = await pool.query(`SELECT * FROM users WHERE openid = $1`, [openid]);
-  return rows[0] || null;
-}
-
-async function createUser({ openid, unionid, nickname, avatar_url }) {
-  const { rows } = await pool.query(
-    `INSERT INTO users (openid, unionid, nickname, avatar_url)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (openid) DO UPDATE SET
-       nickname = COALESCE(NULLIF($3, ''), users.nickname),
-       avatar_url = COALESCE(NULLIF($4, ''), users.avatar_url),
-       unionid = COALESCE($2, users.unionid),
-       last_login_at = NOW(), updated_at = NOW()
-     RETURNING *`,
-    [openid, unionid || null, nickname || '', avatar_url || '']
-  );
-  return rows[0];
-}
-
-async function getUserById(id) {
-  const { rows } = await pool.query(`SELECT * FROM users WHERE id = $1`, [id]);
-  return rows[0] || null;
-}
-
-async function updateUserLogin(id) {
-  await pool.query(`UPDATE users SET last_login_at = NOW() WHERE id = $1`, [id]);
-}
-
-// ── Passengers ───────────────────────────────────────────────
-
-async function listPassengers(userId) {
-  const { rows } = await pool.query(
-    `SELECT * FROM passengers WHERE user_id = $1 ORDER BY is_default DESC, created_at`,
-    [userId]
-  );
-  return rows;
-}
-
-async function addPassenger(userId, { name, phone, id_card, is_default }) {
-  if (is_default) {
-    await pool.query(`UPDATE passengers SET is_default = false WHERE user_id = $1`, [userId]);
-  }
-  const { rows } = await pool.query(
-    `INSERT INTO passengers (user_id, name, phone, id_card, is_default)
-     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-    [userId, name, phone || '', id_card || '', is_default || false]
-  );
-  return rows[0];
-}
-
-async function deletePassenger(userId, passengerId) {
-  const { rowCount } = await pool.query(
-    `DELETE FROM passengers WHERE id = $1 AND user_id = $2`,
-    [passengerId, userId]
-  );
-  return rowCount > 0;
-}
-
-// ── Search History ───────────────────────────────────────────
-
-async function addSearchHistory(userId, { startCity, endCity, travelDate }) {
-  await pool.query(
-    `INSERT INTO search_history (user_id, start_city, end_city, travel_date) VALUES ($1, $2, $3, $4)`,
-    [userId, startCity, endCity, travelDate || null]
-  );
-}
-
-async function getSearchHistory(userId, limit = 20) {
-  const { rows } = await pool.query(
-    `SELECT DISTINCT ON (start_city, end_city) id, start_city, end_city, travel_date, searched_at
-     FROM search_history WHERE user_id = $1
-     ORDER BY start_city, end_city, searched_at DESC`,
-    [userId]
-  );
-  return rows.sort((a, b) => new Date(b.searched_at) - new Date(a.searched_at)).slice(0, limit);
-}
-
-// ── Trips ────────────────────────────────────────────────────
-
-async function addTrip(userId, data) {
-  const { rows } = await pool.query(
-    `INSERT INTO trips (user_id, interval_id, source, start_city, end_city,
-       boarding_station, dropoff_station, travel_date, depart_time, price_yuan, miniapp_path)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-    [userId, data.intervalId || '', data.source || 'yuecx',
-     data.startCity, data.endCity, data.boardingStation || '', data.dropoffStation || '',
-     data.travelDate, data.departTime || '', data.priceYuan || 0, data.miniappPath || '']
-  );
-  return rows[0];
-}
-
-async function listTrips(userId, { status, limit = 30 } = {}) {
-  let sql = `SELECT * FROM trips WHERE user_id = $1`;
-  const params = [userId];
-  if (status) { sql += ` AND status = $2`; params.push(status); }
-  sql += ` ORDER BY travel_date DESC, depart_time DESC LIMIT ${limit}`;
-  const { rows } = await pool.query(sql, params);
-  return rows;
-}
-
-async function updateTripStatus(tripId, userId, status) {
-  const { rowCount } = await pool.query(
-    `UPDATE trips SET status = $3 WHERE id = $1 AND user_id = $2`,
-    [tripId, userId, status]
-  );
-  return rowCount > 0;
-}
-
-async function deleteTrip(tripId, userId) {
-  const { rowCount } = await pool.query(
-    `DELETE FROM trips WHERE id = $1 AND user_id = $2`, [tripId, userId]
-  );
-  return rowCount > 0;
-}
-
 // ── Migration ───────────────────────────────────────────────
 
 async function migrate() {
@@ -426,10 +308,6 @@ module.exports = {
   upsertRoute, getRouteId, getHotRoutes, getAllRoutes, getDestinations, updateRouteLastCrawl,
   upsertIntervals, queryIntervals, getCacheAge, cleanExpired,
   saveOrder, getOrderById, listOrders, updateOrderStatus,
-  findUserByOpenid, createUser, getUserById, updateUserLogin,
-  listPassengers, addPassenger, deletePassenger,
-  addSearchHistory, getSearchHistory,
-  addTrip, listTrips, updateTripStatus, deleteTrip,
   migrate, close,
 };
 

@@ -17,59 +17,83 @@
     background: var(--chat-bg); box-shadow: 0 0 20px var(--shadow);
   }
   header {
-    flex-shrink: 0; padding: 12px 16px; background: var(--green); color: #fff;
-    font-size: 17px; font-weight: 600; display: flex; align-items: center; justify-content: space-between;
+    flex-shrink: 0; padding: 14px 16px; background: var(--green); color: #fff;
+    font-size: 17px; font-weight: 600; text-align: center;
   }
-  .hdr-title { flex: 1; text-align: center; }
-  .hdr-avatar {
-    width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.5);
-    cursor: pointer; background: rgba(255,255,255,0.2); object-fit: cover;
+  #messages {
+    flex: 1; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch; scroll-behavior: smooth;
   }
-  .hdr-login-btn {
-    padding: 4px 12px; border: 1px solid rgba(255,255,255,0.6); border-radius: 14px;
-    background: transparent; color: #fff; font-size: 13px; cursor: pointer;
-  }
-  #messages { flex: 1; overflow-y: auto; padding: 12px 16px; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
   .msg { display: flex; margin-bottom: 14px; gap: 8px; animation: fadeIn .2s ease; }
   .msg.user { flex-direction: row-reverse; }
-  .bubble { max-width: 82%; padding: 10px 14px; border-radius: 16px; line-height: 1.6; font-size: 15px; word-break: break-word; white-space: pre-wrap; }
+  .bubble {
+    max-width: 82%; padding: 10px 14px; border-radius: 16px; line-height: 1.6;
+    font-size: 15px; word-break: break-word; white-space: pre-wrap;
+  }
   .msg.bot .bubble { background: var(--bot-bubble); color: var(--bot-text); border: 1px solid var(--border); border-top-left-radius: 4px; }
   .msg.user .bubble { background: var(--user-bubble); color: var(--user-text); border-top-right-radius: 4px; }
-  .avatar { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; background: #e8e8e8; }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 18px; background: #e8e8e8;
+  }
   .msg.user .avatar { background: var(--green); color: #fff; }
-  .typing .bubble::after { content: ''; display: inline-block; width: 6px; height: 6px; background: #999; border-radius: 50%; margin-left: 4px; animation: blink 1s infinite; }
+  .typing .bubble::after {
+    content: ''; display: inline-block; width: 6px; height: 6px;
+    background: #999; border-radius: 50%; margin-left: 4px; animation: blink 1s infinite;
+  }
   @keyframes blink { 0%,100% { opacity: .2; } 50% { opacity: 1; } }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
   .hint { text-align: center; color: #999; font-size: 12px; padding: 8px 0 4px; }
 
-  #input-bar { flex-shrink: 0; display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--border); background: #fafafa; }
-  .ib-toggle { flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  /* Input Bar */
+  #input-bar {
+    flex-shrink: 0; display: flex; align-items: flex-end; gap: 6px; padding: 8px 10px;
+    border-top: 1px solid var(--border); background: #fafafa;
+  }
+  .ib-toggle {
+    flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%;
+    background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
   .ib-toggle svg { width: 24px; height: 24px; fill: #666; }
-  #input { flex: 1; padding: 8px 14px; border: 1px solid var(--border); border-radius: 20px; font-size: 15px; outline: none; background: var(--input-bg); resize: none; min-height: 36px; max-height: 120px; line-height: 1.4; }
+  #input {
+    flex: 1; padding: 8px 14px; border: 1px solid var(--border); border-radius: 20px;
+    font-size: 15px; outline: none; background: var(--input-bg); resize: none;
+    min-height: 36px; max-height: 120px; line-height: 1.4;
+  }
   #input:focus { border-color: var(--green); }
-  #send-btn { flex-shrink: 0; width: 56px; height: 36px; border: none; border-radius: 18px; background: var(--green); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+  #send-btn {
+    flex-shrink: 0; width: 56px; height: 36px; border: none; border-radius: 18px;
+    background: var(--green); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
   #send-btn:disabled { opacity: .4; }
-  #voice-btn { flex: 1; height: 36px; border: 1px solid var(--border); border-radius: 20px; background: #fff; font-size: 15px; color: #333; font-weight: 500; cursor: pointer; display: none; user-select: none; -webkit-user-select: none; }
+
+  /* Voice Button (WeChat style) */
+  #voice-btn {
+    flex: 1; height: 36px; border: 1px solid var(--border); border-radius: 20px;
+    background: #fff; font-size: 15px; color: #333; font-weight: 500;
+    cursor: pointer; display: none; user-select: none; -webkit-user-select: none;
+    transition: background .1s;
+  }
   #voice-btn:active, #voice-btn.pressing { background: #e0e0e0; }
   .voice-mode #input, .voice-mode #send-btn { display: none; }
   .voice-mode #voice-btn { display: block; }
 
-  /* Location Button & Banner */
-  #loc-btn { flex-shrink: 0; width: 36px; height: 36px; border: none; border-radius: 50%; background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; position: relative; }
-  #loc-btn svg { width: 22px; height: 22px; fill: #999; transition: fill .2s; }
-  #loc-btn.located svg { fill: var(--green); }
-  #loc-btn.locating svg { fill: #faad14; animation: pulse 1s infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
-  #loc-banner { display: none; padding: 6px 14px; background: var(--green-light); font-size: 12px; color: #389e0d; border-bottom: 1px solid #d9f7be; align-items: center; gap: 6px; }
-  #loc-banner.active { display: flex; }
-  #loc-banner .loc-dismiss { margin-left: auto; cursor: pointer; color: #999; font-size: 14px; background: none; border: none; padding: 0 2px; }
-
-  #rec-overlay { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.4); justify-content: center; align-items: center; flex-direction: column; gap: 16px; }
+  /* Recording Overlay */
+  #rec-overlay {
+    display: none; position: fixed; inset: 0; z-index: 100;
+    background: rgba(0,0,0,0.4); justify-content: center; align-items: center;
+    flex-direction: column; gap: 16px;
+  }
   #rec-overlay.active { display: flex; }
-  .rec-box { width: 160px; height: 160px; border-radius: 20px; background: rgba(0,0,0,0.75); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; }
+  .rec-box {
+    width: 160px; height: 160px; border-radius: 20px; background: rgba(0,0,0,0.75);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  }
   .rec-box.cancel { background: rgba(220,50,50,0.85); }
   .rec-waves { display: flex; align-items: center; gap: 3px; height: 40px; }
-  .rec-waves span { width: 4px; border-radius: 2px; background: #07c160; animation: wave 0.8s ease-in-out infinite alternate; }
+  .rec-waves span {
+    width: 4px; border-radius: 2px; background: #07c160;
+    animation: wave 0.8s ease-in-out infinite alternate;
+  }
   .rec-box.cancel .rec-waves span { background: #fff; }
   .rec-waves span:nth-child(1) { height: 12px; animation-delay: 0s; }
   .rec-waves span:nth-child(2) { height: 20px; animation-delay: 0.1s; }
@@ -80,179 +104,173 @@
   .rec-text { color: #fff; font-size: 14px; text-align: center; }
   .rec-hint { color: rgba(255,255,255,0.7); font-size: 13px; }
 
-  /* Route & Booking Cards */
-  .rr-wrap { margin-top: 8px; word-break: normal; white-space: normal; }
-  .rr-item { display: flex; align-items: stretch; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
+  /* Route Results Card */
+  .rr-wrap { margin-top: 8px; }
+  .rr-item {
+    display: flex; align-items: stretch; margin-bottom: 8px;
+    border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff;
+  }
   .rr-item.has-warn { border-left: 3px solid #faad14; }
-  .rr-rank { display: flex; align-items: center; justify-content: center; width: 32px; flex-shrink: 0; background: var(--green-light); font-size: 14px; font-weight: 700; color: var(--green); }
+  .rr-rank {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; flex-shrink: 0; background: var(--green-light);
+    font-size: 14px; font-weight: 700; color: var(--green);
+  }
   .rr-body { flex: 1; padding: 8px 10px; min-width: 0; }
   .rr-top { display: flex; align-items: baseline; gap: 6px; }
-  .rr-time { font-size: 18px; font-weight: 700; color: #222; white-space: nowrap; flex-shrink: 0; }
+  .rr-time { font-size: 18px; font-weight: 700; color: #222; }
   .rr-route { font-size: 12px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rr-bottom { display: flex; align-items: center; gap: 8px; margin-top: 3px; font-size: 12px; color: #666; }
   .rr-price { font-weight: 600; color: #f5222d; }
   .rr-seats { color: #999; }
   .rr-warn { color: #faad14; font-size: 11px; }
   .rr-right { display: flex; align-items: center; padding: 0 10px; flex-shrink: 0; }
-  .rr-book-btn { padding: 6px 10px; border: 1px solid var(--green); border-radius: 14px; background: #fff; color: var(--green); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .rr-book-btn {
+    padding: 6px 10px; border: 1px solid var(--green); border-radius: 14px;
+    background: #fff; color: var(--green); font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+  }
   .rr-book-btn:active { background: var(--green); color: #fff; }
   .rr-footer { font-size: 12px; color: #999; padding: 2px 0; }
-  .bk-card { margin-top: 10px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fafffe; word-break: normal; white-space: normal; }
+
+  /* Booking Card */
+  .bk-card { margin-top: 10px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: #fafffe; }
   .bk-header { background: var(--green); color: #fff; padding: 10px 14px; font-size: 14px; font-weight: 600; }
   .bk-body { padding: 10px 14px; font-size: 13px; line-height: 1.8; color: #333; }
   .bk-row { display: flex; gap: 6px; }
   .bk-label { color: #999; flex-shrink: 0; min-width: 48px; }
   .bk-val { color: #333; font-weight: 500; }
-  .bk-actions { padding: 10px 14px; border-top: 1px solid #f0f0f0; display: flex; gap: 8px; }
-  .bk-copy, .bk-save { flex: 1; padding: 10px; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
-  .bk-copy { background: var(--green); color: #fff; }
-  .bk-save { background: #1890ff; color: #fff; }
-  .bk-copy:active, .bk-save:active { opacity: .7; }
+  .bk-actions { padding: 10px 14px; border-top: 1px solid #f0f0f0; }
+  .bk-copy {
+    width: 100%; padding: 10px; border: none; border-radius: 8px;
+    background: var(--green); color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .bk-copy:active { opacity: .7; }
   .bk-copy.copied { background: #999; }
   .bk-guide { padding: 10px 14px; background: #f8f8f8; font-size: 12px; color: #666; line-height: 1.7; }
   .bk-guide b { color: #333; }
 
-  /* Bottom Tab Bar */
-  #tab-bar { flex-shrink: 0; display: flex; border-top: 1px solid var(--border); background: #fff; }
-  .tab-item { flex: 1; padding: 8px 0 6px; text-align: center; cursor: pointer; color: #999; font-size: 11px; }
-  .tab-item.active { color: var(--green); }
-  .tab-icon { font-size: 22px; display: block; margin-bottom: 2px; }
+  /* Tab Navigation */
+  #nav-tabs {
+    flex-shrink: 0; display: flex; border-bottom: 1px solid var(--border);
+    background: #fafafa;
+  }
+  .nav-tab {
+    flex: 1; padding: 12px; text-align: center; font-size: 14px;
+    color: #666; cursor: pointer; position: relative;
+  }
+  .nav-tab.active { color: var(--green); font-weight: 600; }
+  .nav-tab.active::after {
+    content: ''; position: absolute; bottom: 0; left: 20%; right: 20%;
+    height: 2px; background: var(--green); border-radius: 1px;
+  }
 
-  /* Panels */
-  .panel { display: none; flex: 1; overflow-y: auto; flex-direction: column; }
-  .panel.active { display: flex; }
-
-  /* Trips Panel */
-  .section-title { padding: 14px 16px 8px; font-size: 15px; font-weight: 600; color: #333; background: var(--bg); }
-  .history-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border-bottom: 1px solid #f5f5f5; cursor: pointer; }
-  .history-item:active { background: #f9f9f9; }
-  .hi-route { font-size: 15px; color: #333; font-weight: 500; }
-  .hi-date { font-size: 12px; color: #999; margin-top: 2px; }
-  .hi-arrow { color: #ccc; font-size: 16px; }
-  .trip-item { padding: 14px 16px; background: #fff; border-bottom: 1px solid #f5f5f5; }
-  .trip-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-  .trip-route { font-size: 15px; font-weight: 600; color: #333; }
-  .trip-status { font-size: 12px; padding: 2px 8px; border-radius: 10px; }
-  .trip-status.planned { background: #e6f7ff; color: #1890ff; }
-  .trip-status.completed { background: #f6ffed; color: #52c41a; }
-  .trip-status.cancelled { background: #f5f5f5; color: #999; }
-  .trip-detail { font-size: 13px; color: #666; line-height: 1.6; }
-  .trip-actions { display: flex; gap: 8px; margin-top: 10px; }
-  .trip-btn { padding: 6px 14px; border: 1px solid #ddd; border-radius: 6px; font-size: 12px; cursor: pointer; background: #fff; }
-  .trip-btn.danger { color: #ff4d4f; border-color: #ff4d4f; }
-  .trip-btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
-  .empty-state { text-align: center; padding: 60px 20px; color: #999; }
-  .empty-icon { font-size: 48px; margin-bottom: 12px; }
-
-  /* Profile Panel */
-  .profile-header { padding: 30px 20px; background: linear-gradient(135deg, var(--green), #05a050); color: #fff; text-align: center; }
-  .profile-avatar { width: 64px; height: 64px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.5); margin: 0 auto 10px; background: rgba(255,255,255,0.2); object-fit: cover; }
-  .profile-name { font-size: 18px; font-weight: 600; }
-  .profile-login-hint { font-size: 14px; opacity: 0.8; margin-top: 4px; }
-  .profile-menu { padding: 10px 0; }
-  .menu-group { background: #fff; margin-bottom: 10px; }
-  .menu-item { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #f8f8f8; cursor: pointer; }
-  .menu-item:active { background: #f9f9f9; }
-  .mi-left { display: flex; align-items: center; gap: 10px; }
-  .mi-icon { font-size: 20px; }
-  .mi-text { font-size: 15px; color: #333; }
-  .mi-right { color: #ccc; font-size: 14px; }
-  .mi-badge { font-size: 12px; color: #999; margin-right: 4px; }
-
-  /* Passenger Modal */
-  .modal-overlay { display: none; position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.5); justify-content: center; align-items: flex-end; }
-  .modal-overlay.active { display: flex; }
-  .modal-content { width: 100%; max-width: 480px; background: #fff; border-radius: 16px 16px 0 0; padding: 20px; max-height: 80vh; overflow-y: auto; }
-  .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center; }
-  .modal-close { background: none; border: none; font-size: 20px; color: #999; cursor: pointer; padding: 4px 8px; }
-  .form-group { margin-bottom: 14px; }
-  .form-label { font-size: 13px; color: #666; margin-bottom: 4px; }
-  .form-input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 15px; outline: none; }
-  .form-input:focus { border-color: var(--green); }
-  .form-btn { width: 100%; padding: 12px; border: none; border-radius: 8px; background: var(--green); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 8px; }
-  .passenger-item { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: #fff; border-bottom: 1px solid #f8f8f8; }
-  .pi-info { flex: 1; }
-  .pi-name { font-size: 15px; font-weight: 500; color: #333; }
-  .pi-phone { font-size: 13px; color: #999; margin-top: 2px; }
-  .pi-del { color: #ff4d4f; border: 1px solid #ff4d4f; background: #fff; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  /* Orders Panel */
+  .orders-header {
+    padding: 12px 16px; background: #fff; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .orders-title { font-size: 16px; font-weight: 600; color: #333; }
+  .orders-stats { font-size: 12px; color: #999; }
+  .order-filters {
+    display: flex; gap: 8px; padding: 10px 16px; background: #fff;
+    border-bottom: 1px solid var(--border); overflow-x: auto;
+  }
+  .filter-btn {
+    padding: 6px 14px; border: 1px solid #ddd; border-radius: 16px;
+    font-size: 13px; color: #666; background: #fff; cursor: pointer; white-space: nowrap;
+  }
+  .filter-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
+  .order-list { padding: 10px; }
+  .order-item {
+    background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 10px;
+    border: 1px solid var(--border);
+  }
+  .order-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0;
+  }
+  .order-id { font-size: 12px; color: #999; }
+  .order-status {
+    padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
+  }
+  .order-status.pending { background: #fff7e6; color: #fa8c16; }
+  .order-status.paid { background: #e6f7ff; color: #1890ff; }
+  .order-status.completed { background: #f6ffed; color: #52c41a; }
+  .order-status.cancelled { background: #f5f5f5; color: #999; }
+  .order-route {
+    font-size: 15px; font-weight: 600; color: #333; margin-bottom: 8px;
+  }
+  .order-detail { font-size: 13px; color: #666; line-height: 1.6; }
+  .order-detail-row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .order-label { color: #999; min-width: 48px; }
+  .order-value { color: #333; }
+  .order-price { color: #f5222d; font-weight: 600; }
+  .order-actions {
+    display: flex; gap: 8px; margin-top: 12px; padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+  }
+  .order-btn {
+    flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 6px;
+    font-size: 13px; text-align: center; cursor: pointer; background: #fff;
+  }
+  .order-btn.primary { background: var(--green); color: #fff; border-color: var(--green); }
+  .order-btn.danger { color: #ff4d4f; border-color: #ff4d4f; }
+  .order-btn.stripe { background: #635bff; color: #fff; border-color: #635bff; }
+  .order-btn:disabled { opacity: .5; cursor: not-allowed; }
+  .empty-orders {
+    text-align: center; padding: 60px 20px; color: #999;
+  }
+  .empty-orders-icon { font-size: 48px; margin-bottom: 12px; }
+  .loading-orders {
+    text-align: center; padding: 40px; color: #999;
+  }
 </style>
 </head>
 <body>
 <div id="app">
-  <header>
-    <div style="width:60px"></div>
-    <div class="hdr-title">粤程助手</div>
-    <div id="hdr-right" style="width:60px;text-align:right">
-      <button class="hdr-login-btn" id="login-btn" onclick="doLogin()">登录</button>
-    </div>
-  </header>
+  <header>粤程助手 · 聚合比价</header>
+
+  <!-- Tab Navigation -->
+  <div id="nav-tabs">
+    <div class="nav-tab active" data-tab="chat">💬 智能助手</div>
+    <div class="nav-tab" data-tab="orders">🎫 我的订单</div>
+  </div>
 
   <!-- Chat Panel -->
-  <div id="panel-chat" class="panel active" style="flex-direction: column;">
-    <div id="messages"><div class="hint">广东省城际巴士聚合平台 · 多源比价 · 实时数据</div></div>
-    <div id="loc-banner"><span id="loc-banner-text"></span><button class="loc-dismiss" id="loc-dismiss">&times;</button></div>
+  <div id="chat-panel" style="display: flex; flex-direction: column; flex: 1; overflow: hidden;">
+    <div id="messages">
+      <div class="hint">广东省城际巴士聚合平台 · 多源比价 · 实时数据</div>
+    </div>
     <div id="input-bar">
-      <button id="loc-btn" title="获取当前位置">
-        <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
-      </button>
-      <button class="ib-toggle" id="mode-toggle" title="切换语音/文字">
-        <svg id="icon-mic" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.93V20H8v2h8v-2h-3v-2.07A7 7 0 0019 11h-2z"/></svg>
-        <svg id="icon-kbd" style="display:none" viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 12H4V7h16v10zM6 10h2v2H6v-2zm0 4h8v2H6v-2zm10 0h2v2h-2v-2zm0-4h2v2h-2v-2zm-4 0h2v2h-2v-2z"/></svg>
-      </button>
-      <textarea id="input" rows="1" placeholder="输入你的问题..." enterkeyhint="send"></textarea>
-      <button id="voice-btn">按住 说话</button>
-      <button id="send-btn">发送</button>
+    <button class="ib-toggle" id="mode-toggle" title="切换语音/文字">
+      <svg id="icon-mic" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.93V20H8v2h8v-2h-3v-2.07A7 7 0 0019 11h-2z"/></svg>
+      <svg id="icon-kbd" style="display:none" viewBox="0 0 24 24"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 12H4V7h16v10zM6 10h2v2H6v-2zm0 4h8v2H6v-2zm10 0h2v2h-2v-2zm0-4h2v2h-2v-2zm-4 0h2v2h-2v-2z"/></svg>
+    </button>
+    <textarea id="input" rows="1" placeholder="输入你的问题..." enterkeyhint="send"></textarea>
+    <button id="voice-btn">按住 说话</button>
+    <button id="send-btn">发送</button>
+  </div>
+  </div>
+
+  <!-- Orders Panel -->
+  <div id="orders-panel" style="display: none; flex: 1; overflow-y: auto; background: #f5f5f5;">
+    <div class="orders-header">
+      <div class="orders-title">我的订单</div>
+      <div class="orders-stats" id="orders-stats"></div>
     </div>
-  </div>
-
-  <!-- Trips Panel -->
-  <div id="panel-trips" class="panel" style="background:var(--bg);">
-    <div id="search-history-section"></div>
-    <div id="trips-section"></div>
-  </div>
-
-  <!-- Profile Panel -->
-  <div id="panel-profile" class="panel" style="background:var(--bg);">
-    <div class="profile-header" id="profile-header">
-      <div class="profile-avatar" id="profile-avatar-img" style="display:flex;align-items:center;justify-content:center;font-size:28px;">👤</div>
-      <div class="profile-name" id="profile-name">未登录</div>
-      <div class="profile-login-hint" id="profile-hint">登录后可管理行程和乘客</div>
+    <div class="order-filters">
+      <button class="filter-btn active" data-status="">全部</button>
+      <button class="filter-btn" data-status="pending">待支付</button>
+      <button class="filter-btn" data-status="paid">已支付</button>
+      <button class="filter-btn" data-status="completed">已完成</button>
+      <button class="filter-btn" data-status="cancelled">已取消</button>
     </div>
-    <div class="profile-menu">
-      <div class="menu-group">
-        <div class="menu-item" id="menu-passengers"><div class="mi-left"><span class="mi-icon">👥</span><span class="mi-text">常用乘客</span></div><div class="mi-right"><span class="mi-badge" id="passenger-count"></span>›</div></div>
-        <div class="menu-item" id="menu-notify"><div class="mi-left"><span class="mi-icon">🔔</span><span class="mi-text">出行提醒</span></div><div class="mi-right"><span class="mi-badge" id="notify-status"></span>›</div></div>
-      </div>
-      <div class="menu-group">
-        <div class="menu-item" id="menu-about"><div class="mi-left"><span class="mi-icon">ℹ️</span><span class="mi-text">关于粤程助手</span></div><div class="mi-right">›</div></div>
-        <div class="menu-item" id="menu-logout" style="display:none"><div class="mi-left"><span class="mi-icon">🚪</span><span class="mi-text" style="color:#ff4d4f">退出登录</span></div><div class="mi-right"></div></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Bottom Tab Bar -->
-  <div id="tab-bar">
-    <div class="tab-item active" data-tab="chat"><span class="tab-icon">💬</span>助手</div>
-    <div class="tab-item" data-tab="trips"><span class="tab-icon">🗺️</span>行程</div>
-    <div class="tab-item" data-tab="profile"><span class="tab-icon">👤</span>我的</div>
-  </div>
-</div>
-
-<!-- Passenger Modal -->
-<div class="modal-overlay" id="passenger-modal">
-  <div class="modal-content">
-    <div class="modal-title">常用乘客<button class="modal-close" onclick="closePassengerModal()">✕</button></div>
-    <div id="passenger-list"></div>
-    <div style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:14px">
-      <div class="form-group"><div class="form-label">姓名 *</div><input class="form-input" id="p-name" placeholder="真实姓名"></div>
-      <div class="form-group"><div class="form-label">手机号</div><input class="form-input" id="p-phone" placeholder="手机号码"></div>
-      <div class="form-group"><div class="form-label">身份证号</div><input class="form-input" id="p-idcard" placeholder="身份证号码"></div>
-      <button class="form-btn" onclick="addPassenger()">添加乘客</button>
+    <div class="order-list" id="order-list">
+      <div class="loading-orders">点击「我的订单」标签加载</div>
     </div>
   </div>
 </div>
 
-<!-- Recording Overlay -->
 <div id="rec-overlay">
   <div class="rec-box" id="rec-box">
     <div class="rec-waves"><span></span><span></span><span></span><span></span><span></span></div>
@@ -263,162 +281,150 @@
 
 <script>
 (function() {
-  // ── State ─────────────────────────────────────────────────
-  var token = localStorage.getItem('yc_token');
-  var currentUser = null;
-  var sessionId = localStorage.getItem('yc_session') || ('s_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36));
-  localStorage.setItem('yc_session', sessionId);
-  var sending = false;
-  var voiceMode = false;
-  var userLocation = null;
-
   var messagesEl = document.getElementById('messages');
   var inputEl = document.getElementById('input');
   var sendBtn = document.getElementById('send-btn');
-  var inputBar = document.getElementById('input-bar');
-
-  // ── Auth Headers ──────────────────────────────────────────
-  function authHeaders() {
-    var h = { 'Content-Type': 'application/json' };
-    if (token) h['Authorization'] = 'Bearer ' + token;
-    return h;
-  }
-
-  // ── Login ─────────────────────────────────────────────────
-  window.doLogin = async function() {
-    try {
-      var resp = await fetch('/api/health');
-      var health = await resp.json();
-      if (health.wechat) {
-        window.location.href = '/auth/wechat';
-      } else {
-        var nick = prompt('开发模式登录 — 输入昵称:', '用户');
-        if (!nick) return;
-        var r = await fetch('/auth/dev-login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nickname: nick }) });
-        var data = await r.json();
-        if (data.token) {
-          token = data.token;
-          localStorage.setItem('yc_token', token);
-          currentUser = data.user;
-          updateUI();
-        }
-      }
-    } catch(e) { alert('登录失败: ' + e.message); }
-  };
-
-  async function checkAuth() {
-    var params = new URLSearchParams(window.location.search);
-    if (params.get('token')) {
-      token = params.get('token');
-      localStorage.setItem('yc_token', token);
-      window.history.replaceState({}, '', '/');
-    }
-    if (!token) { updateUI(); return; }
-    try {
-      var resp = await fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + token } });
-      if (resp.ok) { currentUser = await resp.json(); }
-      else { token = null; localStorage.removeItem('yc_token'); }
-    } catch { token = null; localStorage.removeItem('yc_token'); }
-    updateUI();
-  }
-
-  function updateUI() {
-    var loginBtn = document.getElementById('login-btn');
-    var hdrRight = document.getElementById('hdr-right');
-    var profileName = document.getElementById('profile-name');
-    var profileHint = document.getElementById('profile-hint');
-    var profileAvatar = document.getElementById('profile-avatar-img');
-    var logoutItem = document.getElementById('menu-logout');
-
-    if (currentUser) {
-      hdrRight.innerHTML = currentUser.avatar_url
-        ? '<img class="hdr-avatar" src="' + esc(currentUser.avatar_url) + '" onclick="switchTab(\'profile\')">'
-        : '<div class="hdr-avatar" style="display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer" onclick="switchTab(\'profile\')">' + esc((currentUser.nickname||'U')[0]) + '</div>';
-      profileName.textContent = currentUser.nickname || '用户';
-      profileHint.textContent = '会员 · 已登录';
-      if (currentUser.avatar_url) {
-        profileAvatar.outerHTML = '<img class="profile-avatar" id="profile-avatar-img" src="' + esc(currentUser.avatar_url) + '">';
-      } else {
-        profileAvatar.textContent = (currentUser.nickname||'U')[0];
-      }
-      logoutItem.style.display = '';
-    } else {
-      hdrRight.innerHTML = '<button class="hdr-login-btn" onclick="doLogin()">登录</button>';
-      profileName.textContent = '未登录';
-      profileHint.textContent = '登录后可管理行程和乘客';
-      logoutItem.style.display = 'none';
-    }
-  }
-
-  // ── Tab Switch ────────────────────────────────────────────
-  window.switchTab = function(tab) {
-    document.querySelectorAll('.tab-item').forEach(function(t) { t.classList.toggle('active', t.dataset.tab === tab); });
-    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
-    document.getElementById('panel-' + tab).classList.add('active');
-    if (tab === 'trips') loadTripsPanel();
-    if (tab === 'profile') loadProfileData();
-  };
-  document.querySelectorAll('.tab-item').forEach(function(t) {
-    t.addEventListener('click', function() { switchTab(this.dataset.tab); });
-  });
-
-  // ── Voice Recording ───────────────────────────────────────
   var modeToggle = document.getElementById('mode-toggle');
   var iconMic = document.getElementById('icon-mic');
   var iconKbd = document.getElementById('icon-kbd');
   var voiceBtn = document.getElementById('voice-btn');
+  var inputBar = document.getElementById('input-bar');
   var recOverlay = document.getElementById('rec-overlay');
   var recBox = document.getElementById('rec-box');
   var recText = document.getElementById('rec-text');
   var recHint = document.getElementById('rec-hint');
-  var mediaRecorder = null, audioChunks = [], recStartY = 0, cancelled = false;
 
+  var sessionId = 's_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  var sending = false;
+  var voiceMode = false;
+  var userLocation = null;
+
+  // --- Mode Toggle ---
   modeToggle.addEventListener('click', function() {
     voiceMode = !voiceMode;
-    inputBar.classList.toggle('voice-mode', voiceMode);
-    iconMic.style.display = voiceMode ? 'none' : '';
-    iconKbd.style.display = voiceMode ? '' : 'none';
-    if (!voiceMode) inputEl.focus();
+    if (voiceMode) {
+      inputBar.classList.add('voice-mode');
+      iconMic.style.display = 'none';
+      iconKbd.style.display = '';
+    } else {
+      inputBar.classList.remove('voice-mode');
+      iconMic.style.display = '';
+      iconKbd.style.display = 'none';
+      inputEl.focus();
+    }
   });
 
-  function startRec(y) {
-    recStartY = y; cancelled = false; audioChunks = [];
-    recBox.classList.remove('cancel'); recText.textContent = '正在录音...'; recHint.textContent = '↑ 上滑取消';
-    recOverlay.classList.add('active'); voiceBtn.classList.add('pressing');
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
-      var mt = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
-      mediaRecorder = new MediaRecorder(stream, mt ? { mimeType: mt } : {});
-      mediaRecorder.ondataavailable = function(e) { if (e.data.size > 0) audioChunks.push(e.data); };
-      mediaRecorder.onstop = function() { stream.getTracks().forEach(function(t){t.stop();}); if (!cancelled && audioChunks.length) handleVoiceBlob(new Blob(audioChunks, { type: mediaRecorder.mimeType })); };
-      mediaRecorder.start();
-    }).catch(function() { recOverlay.classList.remove('active'); voiceBtn.classList.remove('pressing'); addMessage('无法访问麦克风', 'bot'); });
-  }
-  function moveRec(y) { var d = recStartY - y; cancelled = d > 60; recBox.classList.toggle('cancel', cancelled); recText.textContent = cancelled ? '松开取消' : '正在录音...'; recHint.textContent = cancelled ? '' : '↑ 上滑取消'; }
-  function stopRec() { recOverlay.classList.remove('active'); voiceBtn.classList.remove('pressing'); if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); }
+  // --- Voice Recording (press & hold) ---
+  var mediaRecorder = null;
+  var audioChunks = [];
+  var recStartY = 0;
+  var cancelled = false;
 
-  voiceBtn.addEventListener('touchstart', function(e) { e.preventDefault(); startRec(e.touches[0].clientY); }, { passive: false });
-  voiceBtn.addEventListener('touchmove', function(e) { e.preventDefault(); moveRec(e.touches[0].clientY); }, { passive: false });
+  function startRec(startY) {
+    recStartY = startY;
+    cancelled = false;
+    audioChunks = [];
+    recBox.classList.remove('cancel');
+    recText.textContent = '正在录音...';
+    recHint.textContent = '↑ 上滑取消';
+    recOverlay.classList.add('active');
+    voiceBtn.classList.add('pressing');
+
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+      var mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType: mimeType } : {});
+      mediaRecorder.ondataavailable = function(e) { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = function() {
+        stream.getTracks().forEach(function(t) { t.stop(); });
+        if (!cancelled && audioChunks.length > 0) {
+          var blob = new Blob(audioChunks, { type: mediaRecorder.mimeType });
+          handleVoiceBlob(blob);
+        }
+      };
+      mediaRecorder.start();
+    }).catch(function(err) {
+      console.error('Mic access denied:', err);
+      recOverlay.classList.remove('active');
+      voiceBtn.classList.remove('pressing');
+      addMessage('无法访问麦克风，请在浏览器设置中允许', 'bot');
+    });
+  }
+
+  function moveRec(currentY) {
+    var diff = recStartY - currentY;
+    if (diff > 60) {
+      recBox.classList.add('cancel');
+      recText.textContent = '松开取消';
+      recHint.textContent = '';
+      cancelled = true;
+    } else {
+      recBox.classList.remove('cancel');
+      recText.textContent = '正在录音...';
+      recHint.textContent = '↑ 上滑取消';
+      cancelled = false;
+    }
+  }
+
+  function stopRec() {
+    recOverlay.classList.remove('active');
+    voiceBtn.classList.remove('pressing');
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+      mediaRecorder.stop();
+    }
+  }
+
+  // Touch events
+  voiceBtn.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    startRec(e.touches[0].clientY);
+  }, { passive: false });
+  voiceBtn.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    moveRec(e.touches[0].clientY);
+  }, { passive: false });
   voiceBtn.addEventListener('touchend', function(e) { e.preventDefault(); stopRec(); });
-  voiceBtn.addEventListener('touchcancel', function() { cancelled = true; stopRec(); });
+  voiceBtn.addEventListener('touchcancel', function(e) { cancelled = true; stopRec(); });
+
+  // Mouse events (for desktop testing)
   voiceBtn.addEventListener('mousedown', function(e) { startRec(e.clientY); });
   document.addEventListener('mousemove', function(e) { if (mediaRecorder && mediaRecorder.state === 'recording') moveRec(e.clientY); });
   document.addEventListener('mouseup', function() { if (mediaRecorder && mediaRecorder.state === 'recording') stopRec(); });
 
   async function handleVoiceBlob(blob) {
     addTyping();
-    var form = new FormData(); form.append('audio', blob, 'voice.webm');
+    var form = new FormData();
+    form.append('audio', blob, 'voice.webm');
     try {
       var resp = await fetch('/api/stt', { method: 'POST', body: form });
       if (!resp.ok) throw new Error('STT failed');
-      var data = await resp.json(); removeTyping();
-      if (data.text && data.text.trim()) { addMessage(data.text.trim(), 'user'); doChat(data.text.trim()); }
-      else addMessage('没有识别到语音，请再试一次', 'bot');
-    } catch(e) { removeTyping(); addMessage('语音识别失败，请重试', 'bot'); }
+      var data = await resp.json();
+      removeTyping();
+      if (data.text && data.text.trim()) {
+        addMessage(data.text.trim(), 'user');
+        doChat(data.text.trim());
+      } else {
+        addMessage('没有识别到语音，请再试一次', 'bot');
+      }
+    } catch(e) {
+      removeTyping();
+      addMessage('语音识别失败，请重试', 'bot');
+    }
   }
 
-  // ── Chat ──────────────────────────────────────────────────
-  function scrollBottom() { requestAnimationFrame(function() { messagesEl.scrollTop = messagesEl.scrollHeight; }); }
+  // --- Chat ---
+  function scrollBottom() {
+    requestAnimationFrame(function() { messagesEl.scrollTop = messagesEl.scrollHeight; });
+  }
+
   function esc(s) { var d = document.createElement('span'); d.textContent = s; return d.innerHTML; }
+
+  function shortenStation(name) {
+    if (!name) return '';
+    return name.replace(/\(.*?\)/g, '').replace(/（.*?）/g, '')
+      .replace(/地铁站[A-Z]?\d*口?/g, '站').replace(/公交站/g, '站')
+      .replace(/旁边|路边|前面|出来|左转/g, '').trim();
+  }
 
   function renderBotContent(text) {
     var frag = document.createDocumentFragment();
@@ -433,12 +439,23 @@
       }
       if (!best) { var sp = document.createElement('span'); sp.textContent = text.slice(pos); frag.appendChild(sp); break; }
       if (best.idx > pos) { var sp2 = document.createElement('span'); sp2.textContent = text.slice(pos, best.idx); frag.appendChild(sp2); }
-      var jStart = best.idx + best.pfx.length, depth = 0, jEnd = -1;
-      for (var j = jStart; j < text.length; j++) { if (text[j]==='{') depth++; else if (text[j]==='}') { depth--; if (depth===0) { jEnd=j+1; break; } } }
+      var jStart = best.idx + best.pfx.length;
+      var depth = 0, jEnd = -1;
+      for (var j = jStart; j < text.length; j++) {
+        if (text[j] === '{') depth++;
+        else if (text[j] === '}') { depth--; if (depth === 0) { jEnd = j + 1; break; } }
+      }
       if (jEnd > 0) {
-        try { var d = JSON.parse(text.slice(jStart, jEnd)); frag.appendChild(best.tag === 'ROUTE_RESULTS' ? buildRouteResults(d) : buildBookingCard(d)); pos = jEnd; if (pos < text.length && text[pos]===']') pos++; }
-        catch(e) { var sf = document.createElement('span'); sf.textContent = text.slice(best.idx, jEnd); frag.appendChild(sf); pos = jEnd; }
-      } else { var sr = document.createElement('span'); sr.textContent = text.slice(best.idx); frag.appendChild(sr); break; }
+        try {
+          var d = JSON.parse(text.slice(jStart, jEnd));
+          frag.appendChild(best.tag === 'ROUTE_RESULTS' ? buildRouteResults(d) : buildBookingCard(d));
+          pos = jEnd; if (pos < text.length && text[pos] === ']') pos++;
+        } catch(e) {
+          var sf = document.createElement('span'); sf.textContent = text.slice(best.idx, jEnd); frag.appendChild(sf); pos = jEnd;
+        }
+      } else {
+        var sr = document.createElement('span'); sr.textContent = text.slice(best.idx); frag.appendChild(sr); break;
+      }
     }
     return frag;
   }
@@ -450,12 +467,16 @@
     items.forEach(function(it, idx) {
       var el = document.createElement('div'); el.className = 'rr-item' + (it.warn ? ' has-warn' : '');
       el.innerHTML =
-        '<div class="rr-rank">' + (idx+1) + '</div><div class="rr-body">' +
-        '<div class="rr-top"><span class="rr-time">' + esc(it.time||'') + '</span><span class="rr-route">' + esc(it.boarding||'') + ' → ' + esc(it.dropoff||'') + '</span></div>' +
-        '<div class="rr-bottom"><span class="rr-price">¥' + esc(it.price||'') + '</span><span class="rr-seats">余' + (it.seats!=null?it.seats:'?') + '座</span>' +
-        (it.warn ? '<span class="rr-warn">⚠ ' + esc(it.warn) + '</span>' : '') + '</div></div>' +
+        '<div class="rr-rank">' + (idx+1) + '</div>' +
+        '<div class="rr-body">' +
+          '<div class="rr-top"><span class="rr-time">' + esc(it.time||'') + '</span><span class="rr-route">' + esc(shortenStation(it.boarding)) + ' → ' + esc(shortenStation(it.dropoff)) + '</span></div>' +
+          '<div class="rr-bottom"><span class="rr-price">¥' + esc(it.price||'') + '</span><span class="rr-seats">余' + (it.seats!=null?it.seats:'?') + '座</span>' +
+          (it.warn ? '<span class="rr-warn">⚠ ' + esc(it.warn) + '</span>' : '') + '</div>' +
+        '</div>' +
         '<div class="rr-right"><button class="rr-book-btn">订票</button></div>';
-      el.querySelector('.rr-book-btn').addEventListener('click', function(e) { e.stopPropagation(); inputEl.value='订第'+(idx+1)+'班'; send(); });
+      el.querySelector('.rr-book-btn').addEventListener('click', function(e) {
+        e.stopPropagation(); inputEl.value = '订第' + (idx+1) + '班'; send();
+      });
       wrap.appendChild(el);
     });
     if (data.tip) { var f = document.createElement('div'); f.className = 'rr-footer'; f.textContent = data.tip; wrap.appendChild(f); }
@@ -467,42 +488,34 @@
     var bodyHtml = '';
     [['路线',info.route],['日期',info.date],['上车',(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||'')],
      ['下车',info.dropoffStation],['票价',info.priceYuan?'¥'+info.priceYuan:''],['余票',info.residue!=null?info.residue+'张':'']
-    ].forEach(function(r){ if(r[1]) bodyHtml+='<div class="bk-row"><span class="bk-label">'+esc(r[0])+'</span><span class="bk-val">'+esc(r[1])+'</span></div>'; });
+    ].forEach(function(r){ if(r[1]) bodyHtml += '<div class="bk-row"><span class="bk-label">'+esc(r[0])+'</span><span class="bk-val">'+esc(r[1])+'</span></div>'; });
 
     card.innerHTML =
-      '<div class="bk-header">🎫 订票信息</div><div class="bk-body">' + bodyHtml + '</div>' +
-      '<div class="bk-actions"><button class="bk-copy">📋 复制信息</button>' +
-      (token ? '<button class="bk-save">⭐ 收藏行程</button>' : '') + '</div>' +
+      '<div class="bk-header">🎫 订票信息</div>' +
+      '<div class="bk-body">' + bodyHtml + '</div>' +
+      '<div class="bk-actions"><button class="bk-copy">📋 复制订票信息</button></div>' +
       '<div class="bk-guide">📱 微信搜「<b>粤出行城际巴士</b>」→ <b>' + esc((info.route||'').replace('→',' → ')) + '</b> → <b>' + esc(info.date||'') + '</b> → 找 <b>' + esc(info.fromTime||'') + '</b> 班次下单</div>';
 
-    var copyText = [info.route,info.date,(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''),'下车: '+(info.dropoffStation||''),'票价: ¥'+(info.priceYuan||'')].join('\n');
     var copyBtn = card.querySelector('.bk-copy');
+    var copyText = [info.route,info.date,(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||''),'下车: '+(info.dropoffStation||''),'票价: ¥'+(info.priceYuan||'')].join('\n');
     copyBtn.addEventListener('click', function() {
-      navigator.clipboard.writeText(copyText).then(function() { copyBtn.textContent='✅ 已复制'; copyBtn.classList.add('copied'); setTimeout(function(){ copyBtn.textContent='📋 复制信息'; copyBtn.classList.remove('copied'); },2000); });
-    });
-
-    var saveBtn = card.querySelector('.bk-save');
-    if (saveBtn) {
-      saveBtn.addEventListener('click', function() {
-        var parts = (info.route||'').split(/→|—|->|至/);
-        var tripData = { startCity: (parts[0]||'').trim(), endCity: (parts[1]||'').trim(), travelDate: info.date, departTime: info.boardingTime||info.fromTime||'', boardingStation: info.boardingStation||'', dropoffStation: info.dropoffStation||'', priceYuan: parseFloat(info.priceYuan)||0, source: 'yuecx' };
-        fetch('/api/trips', { method: 'POST', headers: authHeaders(), body: JSON.stringify(tripData) })
-          .then(function(r){ return r.json(); })
-          .then(function(d){ if (d.success) { saveBtn.textContent='✅ 已收藏'; saveBtn.disabled=true; } else alert(d.error||'收藏失败'); })
-          .catch(function(){ alert('收藏失败'); });
+      navigator.clipboard.writeText(copyText).then(function() {
+        copyBtn.textContent = '✅ 已复制'; copyBtn.classList.add('copied');
+        setTimeout(function() { copyBtn.textContent = '📋 复制订票信息'; copyBtn.classList.remove('copied'); }, 2000);
       });
-    }
+    });
     return card;
   }
 
   function addMessage(text, role) {
     var div = document.createElement('div'); div.className = 'msg ' + role;
-    var av = document.createElement('div'); av.className = 'avatar';
-    if (role === 'user' && currentUser && currentUser.avatar_url) { av.innerHTML = '<img src="'+esc(currentUser.avatar_url)+'" style="width:36px;height:36px;border-radius:50%;object-fit:cover">'; }
-    else av.textContent = role === 'user' ? '我' : '🚌';
+    var avatar = document.createElement('div'); avatar.className = 'avatar';
+    avatar.textContent = role === 'user' ? '我' : '🚌';
     var bubble = document.createElement('div'); bubble.className = 'bubble';
-    if (role === 'bot') bubble.appendChild(renderBotContent(text)); else bubble.textContent = text;
-    div.appendChild(av); div.appendChild(bubble); messagesEl.appendChild(div); scrollBottom();
+    if (role === 'bot') bubble.appendChild(renderBotContent(text));
+    else bubble.textContent = text;
+    div.appendChild(avatar); div.appendChild(bubble);
+    messagesEl.appendChild(div); scrollBottom();
   }
 
   function addTyping() {
@@ -512,16 +525,22 @@
   }
   function removeTyping() { var el = document.getElementById('typing-indicator'); if (el) el.remove(); }
 
-  function autoGrow() { inputEl.style.height='auto'; inputEl.style.height=Math.min(inputEl.scrollHeight,120)+'px'; }
+  function autoGrow() { inputEl.style.height = 'auto'; inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px'; }
 
   async function doChat(text) {
-    var typ = document.createElement('div'); typ.className = 'msg bot typing'; typ.id = 'chat-typing';
-    typ.innerHTML = '<div class="avatar">🚌</div><div class="bubble">查询中</div>';
-    messagesEl.appendChild(typ); scrollBottom();
+    var typDiv = document.createElement('div'); typDiv.className = 'msg bot typing'; typDiv.id = 'chat-typing';
+    typDiv.innerHTML = '<div class="avatar">🚌</div><div class="bubble">查询中</div>';
+    messagesEl.appendChild(typDiv); scrollBottom();
+
     try {
-      var ctrl = new AbortController();
-      var timer = setTimeout(function(){ ctrl.abort(); }, 90000);
-      var resp = await fetch('/api/chat', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ sessionId: sessionId, message: text }), signal: ctrl.signal });
+      var controller = new AbortController();
+      var timer = setTimeout(function() { controller.abort(); }, 90000);
+      var payload = { sessionId: sessionId, message: text };
+      if (userLocation) payload.location = userLocation;
+      var resp = await fetch('/api/chat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload), signal: controller.signal,
+      });
       clearTimeout(timer);
       var ct = document.getElementById('chat-typing'); if (ct) ct.remove();
       if (!resp.ok) throw new Error('fail');
@@ -529,192 +548,251 @@
       addMessage(data.reply || '（无回复）', 'bot');
     } catch(e) {
       var ct2 = document.getElementById('chat-typing'); if (ct2) ct2.remove();
-      addMessage(e.name === 'AbortError' ? '请求超时，请再试一次' : '网络异常，请稍后重试', 'bot');
+      addMessage(e.name === 'AbortError' ? '请求超时，服务启动中，请再试一次' : '网络异常，请稍后重试', 'bot');
     }
   }
 
   async function send() {
     var text = inputEl.value.trim();
     if (!text || sending) return;
-    sending = true; sendBtn.disabled = true; inputEl.value = ''; autoGrow();
-    addMessage(text, 'user'); await doChat(text);
+    sending = true; sendBtn.disabled = true;
+    inputEl.value = ''; autoGrow();
+    addMessage(text, 'user');
+    await doChat(text);
     sending = false; sendBtn.disabled = false; inputEl.focus();
   }
+
   sendBtn.addEventListener('click', send);
-  inputEl.addEventListener('keydown', function(e) { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+  inputEl.addEventListener('keydown', function(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
   inputEl.addEventListener('input', autoGrow);
 
-  // ── Trips Panel ───────────────────────────────────────────
-  async function loadTripsPanel() {
-    var histSec = document.getElementById('search-history-section');
-    var tripsSec = document.getElementById('trips-section');
-    if (!token) {
-      histSec.innerHTML = ''; tripsSec.innerHTML = '<div class="empty-state"><div class="empty-icon">🗺️</div>登录后查看行程和搜索历史<br><button style="margin-top:12px;padding:8px 24px;border:1px solid var(--green);border-radius:20px;background:#fff;color:var(--green);font-size:14px;cursor:pointer" onclick="doLogin()">去登录</button></div>';
-      return;
-    }
-    try {
-      var [histResp, tripsResp] = await Promise.all([
-        fetch('/api/search-history', { headers: { 'Authorization': 'Bearer ' + token } }),
-        fetch('/api/trips', { headers: { 'Authorization': 'Bearer ' + token } })
-      ]);
-      var histData = await histResp.json();
-      var tripsData = await tripsResp.json();
+  // ── GPS 静默获取 ────────────────────────────────────────────
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      function(pos) {
+        userLocation = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        console.log('[loc] GPS acquired:', userLocation.latitude.toFixed(4), userLocation.longitude.toFixed(4));
+      },
+      function() { console.log('[loc] GPS denied or unavailable'); },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 300000 }
+    );
+  }
 
-      var histItems = (histData.success && histData.data) ? histData.data : [];
-      var trips = (tripsData.success && tripsData.data) ? tripsData.data : [];
+  addMessage('你好！我是粤程助手 🚌\n\n告诉我从哪到哪、哪天走，帮你找最合适的班次。\n\n例如："明天从深圳南山去广州天河"', 'bot');
+  fetch('/api/health').catch(function(){});
 
-      var hHtml = '';
-      if (histItems.length > 0) {
-        hHtml = '<div class="section-title">最近搜索</div>';
-        histItems.slice(0,10).forEach(function(h) {
-          hHtml += '<div class="history-item" onclick="reSearch(\''+esc(h.start_city)+'\',\''+esc(h.end_city)+'\')">' +
-            '<div><div class="hi-route">'+esc(h.start_city)+' → '+esc(h.end_city)+'</div>' +
-            (h.travel_date ? '<div class="hi-date">'+esc(h.travel_date)+'</div>' : '') + '</div><div class="hi-arrow">›</div></div>';
-        });
-      }
-      histSec.innerHTML = hHtml;
+  // ── Tab 切换功能 ─────────────────────────────────────────
+  var STATUS_TEXT = {
+    pending: '待支付',
+    paid: '已支付',
+    confirmed: '已确认',
+    completed: '已完成',
+    cancelled: '已取消',
+    refunded: '已退款',
+  };
 
-      var tHtml = '<div class="section-title">我的行程</div>';
-      if (trips.length === 0) {
-        tHtml += '<div class="empty-state"><div class="empty-icon">🎫</div>暂无行程<br><span style="font-size:13px">在助手中查车并点「⭐ 收藏行程」添加</span></div>';
+  document.querySelectorAll('.nav-tab').forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var targetTab = this.dataset.tab;
+
+      // 切换 Tab 样式
+      document.querySelectorAll('.nav-tab').forEach(function(t) { t.classList.remove('active'); });
+      this.classList.add('active');
+
+      // 切换面板显示
+      var chatPanel = document.getElementById('chat-panel');
+      var ordersPanel = document.getElementById('orders-panel');
+
+      if (targetTab === 'chat') {
+        chatPanel.style.display = 'flex';
+        ordersPanel.style.display = 'none';
       } else {
-        trips.forEach(function(t) {
-          var statusMap = { planned: '待出行', completed: '已完成', cancelled: '已取消' };
-          tHtml += '<div class="trip-item"><div class="trip-head"><div class="trip-route">'+esc(t.start_city)+' → '+esc(t.end_city)+'</div>' +
-            '<span class="trip-status '+esc(t.status)+'">'+esc(statusMap[t.status]||t.status)+'</span></div>' +
-            '<div class="trip-detail">'+esc(t.travel_date)+' '+esc(t.depart_time||'')+' · '+esc(t.boarding_station||'未指定')+' → '+esc(t.dropoff_station||'未指定')+(t.price_yuan ? ' · ¥'+t.price_yuan : '')+'</div>' +
-            '<div class="trip-actions">' +
-            (t.status==='planned' ? '<button class="trip-btn primary" onclick="reSearch(\''+esc(t.start_city)+'\',\''+esc(t.end_city)+'\')">再查一次</button>' : '') +
-            '<button class="trip-btn danger" onclick="deleteTrip('+t.id+')">删除</button></div></div>';
-        });
+        chatPanel.style.display = 'none';
+        ordersPanel.style.display = 'block';
+        loadOrders();
       }
-      tripsSec.innerHTML = tHtml;
-    } catch(e) {
-      tripsSec.innerHTML = '<div class="empty-state">加载失败</div>';
-    }
-  }
-
-  window.reSearch = function(start, end) {
-    switchTab('chat');
-    var text = '从' + start + '去' + end + '，帮我看看明天的班次';
-    inputEl.value = text; send();
-  };
-
-  window.deleteTrip = async function(id) {
-    if (!confirm('确定删除这条行程？')) return;
-    try {
-      await fetch('/api/trips/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
-      loadTripsPanel();
-    } catch(e) { alert('删除失败'); }
-  };
-
-  // ── Profile / Passengers ──────────────────────────────────
-  async function loadProfileData() {
-    if (!token) return;
-    try {
-      var resp = await fetch('/api/passengers', { headers: { 'Authorization': 'Bearer ' + token } });
-      var data = await resp.json();
-      if (data.success) document.getElementById('passenger-count').textContent = data.data.length + '人';
-    } catch {}
-    document.getElementById('notify-status').textContent = ('Notification' in window && Notification.permission === 'granted') ? '已开启' : '未开启';
-  }
-
-  document.getElementById('menu-passengers').addEventListener('click', function() {
-    if (!token) { doLogin(); return; }
-    openPassengerModal();
-  });
-
-  document.getElementById('menu-notify').addEventListener('click', function() {
-    if (!('Notification' in window)) { alert('浏览器不支持通知'); return; }
-    Notification.requestPermission().then(function(p) {
-      document.getElementById('notify-status').textContent = p === 'granted' ? '已开启' : '未开启';
-      if (p === 'granted') { new Notification('粤程助手', { body: '出行提醒已开启！行程出发前会通知你。', icon: '🚌' }); }
     });
   });
 
-  document.getElementById('menu-about').addEventListener('click', function() {
-    alert('粤程助手 v2.0\n\n广东省城际巴士智能查询推荐平台\n多源比价 · 实时数据 · AI 推荐');
+  // ── 订单过滤功能 ─────────────────────────────────────────
+  document.querySelectorAll('.filter-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      this.classList.add('active');
+      loadOrders(this.dataset.status);
+    });
   });
 
-  document.getElementById('menu-logout').addEventListener('click', function() {
-    if (!confirm('确定退出登录？')) return;
-    token = null; currentUser = null;
-    localStorage.removeItem('yc_token');
-    updateUI();
-    switchTab('chat');
-  });
+  // ── 加载订单列表 ─────────────────────────────────────────
+  async function loadOrders(status) {
+    var orderList = document.getElementById('order-list');
+    var ordersStats = document.getElementById('orders-stats');
+    orderList.innerHTML = '<div class="loading-orders">加载中...</div>';
 
-  async function openPassengerModal() {
-    document.getElementById('passenger-modal').classList.add('active');
     try {
-      var resp = await fetch('/api/passengers', { headers: { 'Authorization': 'Bearer ' + token } });
-      var data = await resp.json();
-      var list = document.getElementById('passenger-list');
-      if (!data.success || !data.data.length) { list.innerHTML = '<div style="text-align:center;color:#999;padding:16px">暂无常用乘客</div>'; return; }
+      var url = '/api/orders';
+      if (status) url += '?status=' + encodeURIComponent(status);
+
+      var resp = await fetch(url);
+      var result = await resp.json();
+
+      if (!result.success) {
+        orderList.innerHTML = '<div class="empty-orders"><div class="empty-orders-icon">⚠️</div>加载失败</div>';
+        return;
+      }
+
+      var orders = result.data.orders || [];
+      ordersStats.textContent = '共 ' + result.data.total + ' 单';
+
+      if (orders.length === 0) {
+        orderList.innerHTML = '<div class="empty-orders"><div class="empty-orders-icon">🎫</div>暂无订单</div>';
+        return;
+      }
+
       var html = '';
-      data.data.forEach(function(p) {
-        html += '<div class="passenger-item"><div class="pi-info"><div class="pi-name">' + esc(p.name) + (p.is_default?' ⭐':'') + '</div>' +
-          (p.phone ? '<div class="pi-phone">' + esc(p.phone) + '</div>' : '') + '</div>' +
-          '<button class="pi-del" onclick="delPassenger('+p.id+')">删除</button></div>';
+      orders.forEach(function(o) {
+        var miniappName = o.miniapp ? o.miniapp.name : (o.source === 'yuecx' ? '粤出行' : '如约城际');
+
+        html += '<div class="order-item">' +
+          '<div class="order-header">' +
+            '<span class="order-id">' + esc(o.orderId) + '</span>' +
+            '<span class="order-status ' + esc(o.status) + '">' + esc(STATUS_TEXT[o.status] || o.statusText) + '</span>' +
+          '</div>' +
+          '<div class="order-route">' + esc(o.route) + '</div>' +
+          '<div class="order-detail">' +
+            '<div class="order-detail-row"><span class="order-label">日期</span><span class="order-value">' + esc(o.date) + ' ' + esc(o.fromTime || '') + '</span></div>' +
+            '<div class="order-detail-row"><span class="order-label">上下车</span><span class="order-value">' + esc(o.boardingStation || '未指定') + ' → ' + esc(o.dropoffStation || '未指定') + '</span></div>' +
+            '<div class="order-detail-row"><span class="order-label">票价</span><span class="order-price">¥' + esc(o.priceYuan) + '</span></div>' +
+            '<div class="order-detail-row"><span class="order-label">来源</span><span class="order-value">' + esc(miniappName) + '</span></div>' +
+          '</div>' +
+          '<div class="order-actions">' +
+            (o.status === 'pending' ? '<button class="order-btn primary" data-action="pay" data-id="' + o.orderId + '">去支付</button>' : '') +
+            (o.status === 'pending' ? '<button class="order-btn danger" data-action="cancel" data-id="' + o.orderId + '">取消</button>' : '') +
+            (o.status === 'paid' || o.status === 'confirmed' ? '<button class="order-btn" data-action="ticket" data-id="' + o.orderId + '">查看车票</button>' : '') +
+            '<button class="order-btn" data-action="detail" data-id="' + o.orderId + '">详情</button>' +
+          '</div>' +
+        '</div>';
       });
-      list.innerHTML = html;
-    } catch { document.getElementById('passenger-list').innerHTML = '<div style="text-align:center;color:#999;padding:16px">加载失败</div>'; }
+
+      orderList.innerHTML = html;
+
+      // 绑定按钮事件
+      orderList.querySelectorAll('.order-btn').forEach(function(btn) {
+        btn.addEventListener('click', handleOrderAction);
+      });
+    } catch (err) {
+      console.error('Load orders error:', err);
+      orderList.innerHTML = '<div class="empty-orders"><div class="empty-orders-icon">⚠️</div>加载失败: ' + esc(err.message) + '</div>';
+    }
   }
 
-  window.closePassengerModal = function() { document.getElementById('passenger-modal').classList.remove('active'); };
+  // ── 订单操作处理 ─────────────────────────────────────────
+  async function handleOrderAction(e) {
+    var action = e.target.dataset.action;
+    var orderId = e.target.dataset.id;
 
-  window.addPassenger = async function() {
-    var name = document.getElementById('p-name').value.trim();
-    if (!name) { alert('请输入姓名'); return; }
-    var phone = document.getElementById('p-phone').value.trim();
-    var idcard = document.getElementById('p-idcard').value.trim();
-    try {
-      var resp = await fetch('/api/passengers', { method: 'POST', headers: authHeaders(), body: JSON.stringify({ name: name, phone: phone, id_card: idcard }) });
-      var data = await resp.json();
-      if (data.success) { document.getElementById('p-name').value=''; document.getElementById('p-phone').value=''; document.getElementById('p-idcard').value=''; openPassengerModal(); }
-      else alert(data.error || '添加失败');
-    } catch(e) { alert('添加失败'); }
-  };
+    if (action === 'cancel') {
+      if (!confirm('确定要取消订单 ' + orderId + ' 吗？')) return;
 
-  window.delPassenger = async function(id) {
-    if (!confirm('确定删除？')) return;
-    try {
-      await fetch('/api/passengers/' + id, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
-      openPassengerModal();
-    } catch { alert('删除失败'); }
-  };
+      try {
+        var resp = await fetch('/api/orders/' + orderId + '/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: '用户取消' }),
+        });
+        var result = await resp.json();
 
-  // ── Trip Reminders ─────────────────────────────────────────
-  async function checkTripReminders() {
-    if (!token || !('Notification' in window) || Notification.permission !== 'granted') return;
-    try {
-      var resp = await fetch('/api/trips?status=planned', { headers: { 'Authorization': 'Bearer ' + token } });
-      var data = await resp.json();
-      if (!data.success || !data.data) return;
-      var now = new Date();
-      var today = now.toISOString().slice(0, 10);
-      var tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1);
-      var tomorrowStr = tomorrow.toISOString().slice(0, 10);
-
-      data.data.forEach(function(trip) {
-        var key = 'remind_' + trip.id;
-        if (localStorage.getItem(key)) return;
-        if (trip.travel_date === today) {
-          new Notification('今天出发提醒', { body: trip.start_city + ' → ' + trip.end_city + ' ' + (trip.depart_time||'') + '\n' + (trip.boarding_station||''), tag: 'trip-' + trip.id });
-          localStorage.setItem(key, '1');
-        } else if (trip.travel_date === tomorrowStr) {
-          new Notification('明天出行提醒', { body: '明天 ' + trip.start_city + ' → ' + trip.end_city + ' ' + (trip.depart_time||'') + '\n记得提前安排出行', tag: 'trip-' + trip.id });
-          localStorage.setItem(key, '1');
+        if (result.success) {
+          alert('订单已取消');
+          loadOrders();
+        } else {
+          alert('取消失败: ' + (result.error || '未知错误'));
         }
-      });
-    } catch {}
+      } catch (err) {
+        alert('取消失败: ' + err.message);
+      }
+    } else if (action === 'pay') {
+      var payMethod = confirm('💳 点击"确定"使用 Stripe 支付 (支持支付宝/微信/信用卡)\n\n点击"取消"查看小程序支付指引');
+
+      if (payMethod) {
+        try {
+          e.target.textContent = '⏳ 跳转中...';
+          e.target.disabled = true;
+
+          var resp = await fetch('/api/orders/' + orderId + '/pay', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          var result = await resp.json();
+
+          if (result.success && result.url) {
+            window.location.href = result.url;
+          } else {
+            alert('支付创建失败: ' + (result.error || '未知错误'));
+            e.target.textContent = '去支付';
+            e.target.disabled = false;
+          }
+        } catch (err) {
+          alert('支付创建失败: ' + err.message);
+          e.target.textContent = '去支付';
+          e.target.disabled = false;
+        }
+      } else {
+        alert('🎫 小程序支付指引:\n\n1. 微信搜索「粤出行城际巴士」或「如约城际巴士」\n2. 进入订单页面\n3. 找到订单完成支付');
+      }
+    } else if (action === 'detail' || action === 'ticket') {
+      try {
+        var resp = await fetch('/api/orders/' + orderId);
+        var result = await resp.json();
+
+        if (result.success) {
+          var detail = result.data;
+          var info = [
+            '订单号: ' + detail.orderId,
+            '状态: ' + (STATUS_TEXT[detail.status] || detail.statusText),
+            '路线: ' + (detail.startCity + ' → ' + detail.endCity),
+            '日期: ' + detail.date,
+            '时间: ' + (detail.fromTime || '未指定'),
+            '上车站: ' + (detail.boardingStation || '未指定'),
+            '下车站: ' + (detail.dropoffStation || '未指定'),
+            '票价: ¥' + detail.priceYuan,
+            '来源: ' + (detail.source === 'yuecx' ? '粤出行' : '如约城际'),
+            '创建时间: ' + new Date(detail.createdAt).toLocaleString(),
+          ].join('\n');
+
+          if (detail.miniapp && detail.miniapp.path) {
+            info += '\n\n小程序路径: ' + detail.miniapp.path;
+          }
+
+          alert(info);
+        }
+      } catch (err) {
+        alert('获取详情失败: ' + err.message);
+      }
+    }
   }
 
-  // ── Init ──────────────────────────────────────────────────
-  addMessage('你好！我是粤程助手 🚌\n\n告诉我从哪到哪、哪天走，帮你找最合适的班次。\n\n例如："明天从深圳南山去广州天河"', 'bot');
-  checkAuth().then(function() { checkTripReminders(); });
-  setInterval(checkTripReminders, 30 * 60 * 1000);
-  fetch('/api/health').catch(function(){});
+  // ── 处理支付回调 ─────────────────────────────────────────
+  (function handlePaymentCallback() {
+    var urlParams = new URLSearchParams(window.location.search);
+    var payment = urlParams.get('payment');
+    var orderId = urlParams.get('orderId');
+
+    if (payment === 'success') {
+      addMessage('✅ 支付成功！订单号: ' + (orderId || '') + '\n\n感谢您的购买，订单已确认。', 'bot');
+      window.history.replaceState({}, '', '/');
+    } else if (payment === 'cancelled') {
+      addMessage('⚠️ 支付已取消。订单 ' + (orderId || '') + ' 仍保留，您可以稍后重新支付。', 'bot');
+      window.history.replaceState({}, '', '/');
+    } else if (payment === 'error') {
+      var message = urlParams.get('message') || '未知错误';
+      addMessage('❌ 支付处理失败: ' + decodeURIComponent(message) + '\n\n请稍后重试或联系客服。', 'bot');
+      window.history.replaceState({}, '', '/');
+    } else if (payment === 'pending') {
+      addMessage('⏳ 支付处理中，订单号: ' + (orderId || '') + '\n\n请稍等片刻，系统正在确认支付状态。', 'bot');
+      window.history.replaceState({}, '', '/');
+    }
+  })();
 })();
 </script>
 </body>
