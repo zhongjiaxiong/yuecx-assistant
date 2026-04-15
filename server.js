@@ -205,7 +205,7 @@ app.post("/api/chat", async (req, res) => {
     };
 
     try {
-      const ctx = { location: session.location };
+      const ctx = { location: session.location, lastUserMessage: message };
       const reply = await chat(session.messages, null, ctx, onProgress, onCardReady);
       clearTimeout(timeout);
       if (!res.writableEnded) {
@@ -236,7 +236,7 @@ app.post("/api/chat", async (req, res) => {
     }, 60000);
 
     try {
-      const ctx = { location: session.location };
+      const ctx = { location: session.location, lastUserMessage: message };
       const reply = await chat(session.messages, null, ctx);
       clearTimeout(timeout);
       if (!res.headersSent) res.json({ reply });

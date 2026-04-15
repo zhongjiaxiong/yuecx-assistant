@@ -244,8 +244,33 @@ function formatInterval(row) {
 
 // ── Tool 4: score_and_rank ──────────────────────────────────
 
+function extractDestFromMessage(message, endCity) {
+  if (!message || !endCity) return null;
+  const patterns = [
+    new RegExp(`(?:去|到|往)${endCity}([^\\s,，。！？、；：""（）()\\n]{2,10})`),
+    new RegExp(`${endCity}([^\\s,，。！？、；：""（）()\\n]{2,10})`),
+  ];
+  for (const re of patterns) {
+    const m = message.match(re);
+    if (m && m[1]) {
+      const dest = m[1].replace(/[。，！？、]+$/, "").replace(/(?:怎么走|怎么去|在哪|吗|呢|吧|啊|呀|哦|的)$/, "");
+      if (dest.length >= 2) return dest;
+    }
+  }
+  return null;
+}
+
 async function scoreAndRankTool(params, userId, ctx) {
-  const { date, startCity, endCity, targetTime, timeMode, preferBoarding, preferDropoff, weights, topN } = params;
+  let { date, startCity, endCity, targetTime, timeMode, preferBoarding, preferDropoff, weights, topN } = params;
+
+  if ((!preferDropoff || preferDropoff.length === 0) && ctx?.lastUserMessage && endCity) {
+    const extracted = extractDestFromMessage(ctx.lastUserMessage, endCity);
+    if (extracted) {
+      console.log(`[score_and_rank] auto-extracted preferDropoff="${extracted}" from user message`);
+      preferDropoff = [extracted];
+    }
+  }
+
   const searchResult = await searchIntervals({ date, startCity, endCity });
   if (!searchResult.success) return { success: false, error: searchResult.error };
 
