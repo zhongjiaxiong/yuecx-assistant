@@ -67,6 +67,17 @@ header h1{font-size:18px;font-weight:600}
 .matrix-legend span{display:flex;align-items:center;gap:3px}
 .legend-sq{width:12px;height:12px;border-radius:3px;display:inline-block}
 
+.group-arrow{display:inline-block;width:14px;font-size:10px;color:var(--text-secondary);transition:transform .15s}
+.group-summary td.route-cell{background:var(--gray-bg) !important;font-weight:500}
+.group-summary:hover td{background:#eef0f3 !important}
+.group-child td.route-cell{padding-left:22px !important}
+
+.expand-btn{background:none;border:1px solid var(--border);padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px;color:var(--text-secondary)}
+.expand-btn:hover{background:var(--gray-bg)}
+
+.cov-bar{display:inline-block;width:32px;height:6px;background:var(--gray-bg);border-radius:3px;vertical-align:middle;margin-left:4px;overflow:hidden}
+.cov-fill{display:block;height:100%;border-radius:3px}
+
 /* Anomalies */
 .anomaly-list{display:flex;flex-direction:column;gap:8px}
 .anomaly-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;font-size:13px}
@@ -197,70 +208,142 @@ function renderOverview(ov) {
   </div>`;
 }
 
-let currentSourceFilter = "all";
-let currentSearch = "";
+let _covData = null;
 
 function renderCoverage(cov) {
+  _covData = cov;
   const dates = cov.dates || [];
-  let routes = cov.routes || [];
+  const routes = cov.routes || [];
+
+  const groups = {};
+  for (const r of routes) {
+    const cov15 = r.counts.filter(c => c > 0).length;
+    const total = r.counts.reduce((a, b) => a + b, 0);
+    const key = r.startCity;
+    if (!groups[key]) groups[key] = { city: key, routes: [], totalIntervals: 0, covDays: 0 };
+    groups[key].routes.push({ ...r, covPct: Math.round(cov15 / 15 * 100), totalIntervals: total });
+    groups[key].totalIntervals += total;
+    groups[key].covDays = Math.max(groups[key].covDays, cov15);
+  }
+
+  const sortedGroups = Object.values(groups).sort((a, b) => b.totalIntervals - a.totalIntervals);
+  for (const g of sortedGroups) g.routes.sort((a, b) => b.totalIntervals - a.totalIntervals);
 
   const toolbar = `<div class="toolbar">
-    <select id="sourceFilter" onchange="applyFilters()">
+    <select id="sourceFilter" onchange="applyGroupFilters()">
       <option value="all">全部数据源</option>
       <option value="yuecx">粤程</option>
       <option value="busboss">车盈网</option>
     </select>
-    <input type="text" id="citySearch" placeholder="搜索城市名..." oninput="applyFilters()">
+    <select id="covFilter" onchange="applyGroupFilters()">
+      <option value="0">显示全部路线</option>
+      <option value="20" selected>覆盖率 ≥ 20%</option>
+      <option value="50">覆盖率 ≥ 50%</option>
+      <option value="80">覆盖率 ≥ 80%</option>
+    </select>
+    <input type="text" id="citySearch" placeholder="搜索城市名..." oninput="applyGroupFilters()">
+    <button class="expand-btn" onclick="toggleAllGroups(true)">展开全部</button>
+    <button class="expand-btn" onclick="toggleAllGroups(false)">收起全部</button>
   </div>`;
 
-  const thead = `<tr><th class="route-col">路线</th>${dates.map(d =>
+  const dateHeaders = dates.map(d =>
     `<th class="${isToday(d) ? 'today-col' : ''}">${fmtDateShort(d)}<br><span style="font-weight:400">${weekday(d)}</span></th>`
-  ).join("")}</tr>`;
+  ).join("");
 
-  const tbody = routes.map(r => {
-    const sourceTag = `<span class="source-tag ${r.source}">${SOURCE_LABELS[r.source] || r.source}</span>`;
-    const hotStar = r.isHot ? '<span class="hot-star">★</span>' : '';
-    const stale = r.lastCrawlHoursAgo != null && r.lastCrawlHoursAgo > 24
-      ? `<span class="stale">${Math.round(r.lastCrawlHoursAgo)}h前</span>` : '';
-    const routeLabel = `${hotStar}${esc(r.startCity)}→${esc(r.endCity)}${sourceTag}${stale}`;
+  let html = '';
+  for (const g of sortedGroups) {
+    const groupRoutes = g.routes;
+    const sources = [...new Set(groupRoutes.map(r => r.source))];
+    const srcTags = sources.map(s => `<span class="source-tag ${s}">${SOURCE_LABELS[s] || s}</span>`).join(" ");
+    const avgCov = Math.round(groupRoutes.reduce((s, r) => s + r.covPct, 0) / groupRoutes.length);
+    const covColor = avgCov >= 60 ? 'var(--green)' : avgCov >= 30 ? 'var(--yellow)' : 'var(--red)';
 
-    const cells = r.counts.map((c, i) => {
-      let cls = "c-gray";
-      if (c > 10) cls = "c-green";
-      else if (c > 0) cls = "c-yellow";
-      else if (c === 0) cls = "c-red";
-      const tip = `${dates[i]}: ${c} 班次`;
-      const todayCls = isToday(dates[i]) ? ' today-col' : '';
-      return `<td class="${todayCls}"><span class="cell ${cls}" data-tip="${tip}">${c}</span></td>`;
+    const summaryRow = groupRoutes.length === 1
+      ? renderRouteRow(groupRoutes[0], dates)
+      : `<tr class="group-summary" data-city="${esc(g.city)}">
+          <td class="route-cell" style="cursor:pointer" onclick="toggleGroup('${esc(g.city)}')">
+            <span class="group-arrow" id="arrow-${esc(g.city)}">▶</span>
+            <b>${esc(g.city)}</b>出发 ${srcTags}
+            <span style="color:var(--text-secondary);font-size:11px;margin-left:6px">${groupRoutes.length}条路线 · ${g.totalIntervals.toLocaleString()}班次</span>
+          </td>
+          ${dates.map((d, i) => {
+            const dayTotal = groupRoutes.reduce((s, r) => s + r.counts[i], 0);
+            let cls = dayTotal > 50 ? 'c-green' : dayTotal > 0 ? 'c-yellow' : 'c-gray';
+            const todayCls = isToday(d) ? ' today-col' : '';
+            return `<td class="${todayCls}"><span class="cell ${cls}" data-tip="${d}: ${dayTotal} 班次">${dayTotal}</span></td>`;
+          }).join("")}
+        </tr>`;
+
+    const childRows = groupRoutes.length === 1 ? '' : groupRoutes.map(r => {
+      const row = renderRouteRow(r, dates);
+      return row.replace('<tr ', `<tr class="group-child" data-group="${esc(g.city)}" style="display:none" `);
     }).join("");
 
-    return `<tr data-source="${r.source}" data-cities="${esc(r.startCity + r.endCity)}"><td class="route-cell">${routeLabel}</td>${cells}</tr>`;
-  }).join("");
+    html += summaryRow + childRows;
+  }
 
   const legend = `<div class="matrix-legend">
     <span><span class="legend-sq" style="background:var(--green-bg)"></span> >10 班次</span>
-    <span><span class="legend-sq" style="background:var(--yellow-bg)"></span> 1-10 班次</span>
-    <span><span class="legend-sq" style="background:var(--red-bg)"></span> 0 班次</span>
-    <span><span class="legend-sq" style="background:var(--gray-bg)"></span> 无数据</span>
+    <span><span class="legend-sq" style="background:var(--yellow-bg)"></span> 1~10 班次</span>
+    <span><span class="legend-sq" style="background:var(--gray-bg)"></span> 0 / 无数据</span>
   </div>`;
 
+  const visibleCount = sortedGroups.reduce((s, g) => s + g.routes.length, 0);
+
   return `<div class="section">
-    <div class="section-title">数据覆盖矩阵 <span class="count">${routes.length} 条路线 × ${dates.length} 天</span></div>
+    <div class="section-title">数据覆盖矩阵 <span class="count" id="covCount">${visibleCount} 条路线 · ${sortedGroups.length} 个出发城市 · ${dates.length} 天</span></div>
     ${toolbar}
-    <div class="matrix-wrap"><table class="matrix" id="matrixTable"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+    <div class="matrix-wrap"><table class="matrix" id="matrixTable"><thead><tr><th class="route-col">路线 / 城市</th>${dateHeaders}</tr></thead><tbody>${html}</tbody></table></div>
     ${legend}
   </div>`;
 }
 
-function applyFilters() {
+function renderRouteRow(r, dates) {
+  const sourceTag = `<span class="source-tag ${r.source}">${SOURCE_LABELS[r.source] || r.source}</span>`;
+  const covBar = `<span class="cov-bar" title="覆盖率 ${r.covPct}%"><span class="cov-fill" style="width:${r.covPct}%;background:${r.covPct >= 60 ? 'var(--green)' : r.covPct >= 30 ? 'var(--yellow)' : 'var(--red)'}"></span></span>`;
+  const routeLabel = `${esc(r.startCity)}→${esc(r.endCity)} ${sourceTag} ${covBar}`;
+
+  const cells = r.counts.map((c, i) => {
+    let cls = c > 10 ? 'c-green' : c > 0 ? 'c-yellow' : 'c-gray';
+    const todayCls = isToday(dates[i]) ? ' today-col' : '';
+    return `<td class="${todayCls}"><span class="cell ${cls}" data-tip="${dates[i]}: ${c} 班次">${c}</span></td>`;
+  }).join("");
+
+  return `<tr data-source="${r.source}" data-cities="${esc(r.startCity + r.endCity)}" data-cov="${r.covPct}"><td class="route-cell">${routeLabel}</td>${cells}</tr>`;
+}
+
+function toggleGroup(city) {
+  const children = document.querySelectorAll(`.group-child[data-group="${city}"]`);
+  const arrow = document.getElementById('arrow-' + city);
+  const visible = children[0]?.style.display !== 'none';
+  children.forEach(el => el.style.display = visible ? 'none' : '');
+  if (arrow) arrow.textContent = visible ? '▶' : '▼';
+}
+
+function toggleAllGroups(expand) {
+  document.querySelectorAll('.group-child').forEach(el => el.style.display = expand ? '' : 'none');
+  document.querySelectorAll('.group-arrow').forEach(el => el.textContent = expand ? '▼' : '▶');
+}
+
+function applyGroupFilters() {
   const source = document.getElementById("sourceFilter").value;
+  const minCov = parseInt(document.getElementById("covFilter").value) || 0;
   const search = document.getElementById("citySearch").value.trim().toLowerCase();
-  const rows = document.querySelectorAll("#matrixTable tbody tr");
-  rows.forEach(tr => {
+
+  let shown = 0;
+  document.querySelectorAll("#matrixTable tbody tr").forEach(tr => {
+    if (tr.classList.contains('group-summary')) {
+      const city = (tr.dataset.city || "").toLowerCase();
+      const show = !search || city.includes(search);
+      tr.style.display = show ? '' : 'none';
+      return;
+    }
     const s = tr.dataset.source;
     const c = (tr.dataset.cities || "").toLowerCase();
-    const show = (source === "all" || s === source) && (!search || c.includes(search));
-    tr.style.display = show ? "" : "none";
+    const cov = parseInt(tr.dataset.cov) || 0;
+    const show = (source === "all" || s === source) && (!search || c.includes(search)) && cov >= minCov;
+    tr.style.display = show ? '' : 'none';
+    if (show) shown++;
   });
 }
 
