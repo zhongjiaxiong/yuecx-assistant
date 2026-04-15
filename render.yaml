@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: starter
     buildCommand: npm ci
-    startCommand: npm run migrate && npm start
+    startCommand: npm start
     envVars:
       - key: DATABASE_URL
         fromDatabase:

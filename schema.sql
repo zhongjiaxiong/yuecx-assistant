@@ -99,7 +99,6 @@ CREATE TABLE IF NOT EXISTS station_coords (
 );
 
 -- 爬虫运行日志
-DROP TABLE IF EXISTS crawl_logs;
 CREATE TABLE IF NOT EXISTS crawl_logs (
   id            SERIAL PRIMARY KEY,
   crawler       VARCHAR NOT NULL,

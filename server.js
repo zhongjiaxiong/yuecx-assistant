@@ -510,7 +510,7 @@ function scheduleDailyCrawl() {
 // ── 启动 ──────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API endpoints:`);
   console.log(`  - POST /api/wx-login         微信小程序登录`);
@@ -521,6 +521,13 @@ app.listen(PORT, () => {
   console.log(`  - POST /api/cron/crawl       手动触发广深爬虫`);
   console.log(`  - GET  /api/health           健康检查`);
   console.log(`  - GET  /api/monitor/crawl-status  爬虫运行监控`);
+
+  try {
+    await db.migrate();
+    console.log("[startup] 数据库 migration 完成");
+  } catch (e) {
+    console.error("[startup] migration error:", e.message);
+  }
 
   console.log("[startup] 同步所有城市和路线元数据...");
   syncMeta("startup")
