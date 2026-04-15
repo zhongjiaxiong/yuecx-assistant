@@ -3,12 +3,17 @@
  * 与 crawler.js (亿路行) 对等的接口:
  *   - syncBusbossMeta()       — 同步城市+路线到 DB (source='busboss')
  *   - crawlBusbossOnDemand()  — 按需查询班次并写入 intervals 表
+ *
+ * API 响应格式: { success: boolean, total?: number, msg?: string, data: [] }
+ * 班次查询端点: API_LineClassDayLineSaleQuery_V2
+ * 参数名均为 PascalCase: StartCityCode, ArrivalCityCode, ClassDate, PageNumber, PageSize
  */
 
 const db = require("./db");
 const { getBusbossRequestConfig } = require("./token_manager");
 
 const SOURCE = "busboss";
+const PAGE_SIZE = 50;
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -44,34 +49,33 @@ function parseBusbossInterval(raw, routeId, tripDate, crawlTime) {
   const priceFen = Math.round(priceYuan * 100);
 
   const boardingStations = (raw.StartNodeList || []).map((n) => ({
-    name: n.NodeName || n.Name || "",
-    arriveTime: "",
-    adcode: "",
-    code: n.NodeID || n.GID || "",
-    id: n.NodeID || n.GID || "",
+    name: n.NodeName || "",
+    arriveTime: n.ClassTime || "",
+    adcode: n.DistrictCode || "",
+    code: n.NodeGID || n.GID || "",
+    id: n.NodeGID || n.GID || "",
     lat: parseGeocoder(n.Geocoder).lat,
     lng: parseGeocoder(n.Geocoder).lng,
   }));
 
-  const dropoffStations = (raw.EndNodeList || []).map((n) => ({
-    name: n.NodeName || n.Name || "",
-    arriveTime: "",
-    adcode: "",
-    code: n.NodeID || n.GID || "",
-    id: n.NodeID || n.GID || "",
+  const dropoffStations = (raw.ArrivalNodeList || []).map((n) => ({
+    name: n.NodeName || "",
+    arriveTime: n.ClassTime || "",
+    adcode: n.DistrictCode || "",
+    code: n.NodeGID || n.GID || "",
+    id: n.NodeGID || n.GID || "",
     lat: parseGeocoder(n.Geocoder).lat,
     lng: parseGeocoder(n.Geocoder).lng,
   }));
 
-  // busboss GID is a uuid, prefix with 'bb_' to avoid collision with ylxweb interval IDs
-  const intervalId = `bb_${raw.GID || raw.LineClassDayGID || ""}`;
+  const intervalId = `bb_${raw.GID || ""}`;
 
   return {
     interval_id: intervalId,
     route_id: routeId,
     take_date: tripDate,
     from_time: raw.ClassTime || "",
-    interval_name: raw.LineName || raw.LineClassDayName || "",
+    interval_name: raw.LineName || "",
     price_fen: priceFen,
     residue: raw.CanSaleCount ?? 0,
     status: raw.CanSaleCount > 0 ? 1 : 0,
@@ -94,14 +98,14 @@ async function syncBusbossMeta(trigger = "auto") {
     console.log("[busboss-meta] 同步车盈网城市列表...");
 
     const cityResult = await busbossGet("/BookSeatsApi/WX_StartCityQuery");
-    if (cityResult.Code !== 200 || !cityResult.Data) {
-      throw new Error(`WX_StartCityQuery failed: ${cityResult.Msg || JSON.stringify(cityResult)}`);
+    if (!cityResult.success || !cityResult.data) {
+      throw new Error(`WX_StartCityQuery failed: ${cityResult.msg || JSON.stringify(cityResult).slice(0, 200)}`);
     }
 
-    const cities = cityResult.Data;
+    const cities = cityResult.data;
     cityCount = cities.length;
     for (const c of cities) {
-      const cityId = `bb_${c.CityCode || c.CityID}`;
+      const cityId = `bb_${c.CityCode}`;
       await db.upsertCity(cityId, c.CityName, SOURCE);
     }
     console.log(`[busboss-meta] ${cities.length} 个城市已同步`);
@@ -109,14 +113,14 @@ async function syncBusbossMeta(trigger = "auto") {
     console.log("[busboss-meta] 同步车盈网路线...");
     for (let i = 0; i < cities.length; i++) {
       const c = cities[i];
-      const startCityId = `bb_${c.CityCode || c.CityID}`;
+      const startCityId = `bb_${c.CityCode}`;
       try {
         const endResult = await busbossGet("/BookSeatsApi/WX_ArrivalCityQuery", {
-          startCityId: c.CityCode || c.CityID,
+          startCityId: c.CityCode,
         });
-        if (endResult.Code === 200 && endResult.Data) {
-          for (const dest of endResult.Data) {
-            const endCityId = `bb_${dest.CityCode || dest.CityID}`;
+        if (endResult.success && endResult.data) {
+          for (const dest of endResult.data) {
+            const endCityId = `bb_${dest.CityCode}`;
             await db.upsertCity(endCityId, dest.CityName, SOURCE);
             await db.upsertRoute(startCityId, endCityId, SOURCE);
             routeCount++;
@@ -139,7 +143,7 @@ async function syncBusbossMeta(trigger = "auto") {
 // ── 按需实时查询 ────────────────────────────────────────────
 
 /**
- * 根据 busboss 原始城市代码查询班次
+ * 根据 busboss 原始城市代码查询班次（带分页）
  * @param {string} startCityCode - busboss 城市代码 (如 "440300")
  * @param {string} endCityCode   - busboss 城市代码 (如 "440100")
  * @param {string} date          - YYYY-MM-DD
@@ -147,22 +151,37 @@ async function syncBusbossMeta(trigger = "auto") {
  */
 async function fetchBusbossIntervals(startCityCode, endCityCode, date) {
   const crawlTime = new Date().toISOString();
-  const result = await busbossGet("/BookSeatsApi/API_LineClassDaySaleQuery_V2", {
-    startCityId: startCityCode,
-    arrivalCityId: endCityCode,
-    classDate: date,
-    startNodeId: "",
-    arrivalNodeId: "",
-  });
+  const all = [];
+  let page = 1;
 
-  if (result.Code !== 200 || !result.Data) {
-    console.warn("[busboss-crawl] API fail:", result.Code, result.Msg || "no data");
-    return [];
+  while (true) {
+    const result = await busbossGet("/BookSeatsApi/API_LineClassDayLineSaleQuery_V2", {
+      ClassDate: date,
+      StartCityCode: startCityCode,
+      ArrivalCityCode: endCityCode,
+      PageNumber: String(page),
+      PageSize: String(PAGE_SIZE),
+    });
+
+    if (!result.success || !result.data) {
+      if (page === 1) {
+        console.warn("[busboss-crawl] API fail:", result.msg || "no data");
+      }
+      break;
+    }
+
+    const list = result.data;
+    for (const raw of list) {
+      all.push(parseBusbossInterval(raw, null, date, crawlTime));
+    }
+
+    console.log(`[busboss-crawl] ${startCityCode}→${endCityCode} ${date} page ${page}: ${list.length} 班次`);
+
+    if (list.length < PAGE_SIZE) break;
+    page++;
   }
 
-  const list = result.Data || [];
-  console.log(`[busboss-crawl] ${startCityCode}→${endCityCode} ${date}: ${list.length} 班次`);
-  return list.map((raw) => parseBusbossInterval(raw, null, date, crawlTime));
+  return all;
 }
 
 /**
