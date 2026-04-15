@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>粤程助手 · 爬虫监控</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f7fa;--card:#fff;--border:#e4e7ed;--text:#303133;--text-secondary:#909399;
+  --green:#67c23a;--red:#f56c6c;--gray:#c0c4cc;--blue:#409eff;
+  --green-bg:#f0f9eb;--red-bg:#fef0f0;--gray-bg:#f4f4f5;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+.container{max-width:960px;margin:0 auto;padding:20px 16px}
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
+header h1{font-size:20px;font-weight:600}
+.header-right{display:flex;align-items:center;gap:12px}
+.refresh-btn{background:var(--blue);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:4px}
+.refresh-btn:hover{opacity:.85}
+.refresh-btn:disabled{opacity:.5;cursor:not-allowed}
+.auto-label{font-size:12px;color:var(--text-secondary)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
+.card-title{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.last-run{font-size:13px;color:var(--text-secondary);margin-bottom:14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:500}
+.badge-success{background:var(--green-bg);color:var(--green)}
+.badge-failed{background:var(--red-bg);color:var(--red)}
+.badge-running{background:#e6f7ff;color:#409eff}
+.badge-none{background:var(--gray-bg);color:var(--gray)}
+.calendar-strip{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
+.day-cell{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:default}
+.day-label{font-size:10px;color:var(--text-secondary)}
+.day-dot{width:14px;height:14px;border-radius:50%;position:relative}
+.day-dot.green{background:var(--green)}
+.day-dot.red{background:var(--red)}
+.day-dot.gray{background:#dcdfe6}
+.day-dot:hover::after{content:attr(data-tip);position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#303133;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;white-space:nowrap;z-index:10;pointer-events:none}
+.legend{font-size:11px;color:var(--text-secondary);display:flex;gap:12px;margin-top:4px}
+.legend span{display:flex;align-items:center;gap:3px}
+.legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.error-box{background:var(--red-bg);border:1px solid #fbc4c4;border-radius:6px;padding:10px 12px;font-size:12px;color:#c45656;margin-top:8px;word-break:break-all}
+
+.log-table{width:100%;border-collapse:collapse;font-size:13px}
+.log-table th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);font-weight:600;color:var(--text-secondary);font-size:12px}
+.log-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+.log-table tr.failed-row{background:var(--red-bg)}
+.log-table tr.clickable{cursor:pointer}
+.error-detail{font-size:11px;color:#c45656;padding:4px 10px 8px;word-break:break-all;display:none}
+.error-detail.open{display:table-row}
+
+.loading{text-align:center;padding:40px;color:var(--text-secondary)}
+.empty-state{text-align:center;padding:30px;color:var(--text-secondary);font-size:14px}
+
+@media(max-width:600px){
+  .container{padding:12px 10px}
+  header h1{font-size:17px}
+  .calendar-strip{gap:3px}
+  .day-dot{width:12px;height:12px}
+  .log-table{font-size:12px}
+  .log-table th,.log-table td{padding:6px 6px}
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>粤程助手 · 爬虫监控</h1>
+    <div class="header-right">
+      <span class="auto-label" id="autoLabel">60s 自动刷新</span>
+      <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        刷新
+      </button>
+    </div>
+  </header>
+  <div id="content"><div class="loading">加载中...</div></div>
+</div>
+
+<script>
+const TRIGGER_LABELS = {
+  startup: "启动",
+  daily_cron: "定时",
+  manual_http: "手动",
+  github_actions: "CI",
+  auto: "自动",
+};
+
+let autoTimer = null;
+
+function formatDuration(ms) {
+  if (ms == null) return "-";
+  if (ms < 1000) return ms + "ms";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return s + "秒";
+  const m = Math.floor(s / 60);
+  const rs = s % 60;
+  return rs > 0 ? m + "分" + rs + "秒" : m + "分";
+}
+
+function formatTime(iso) {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  const now = new Date();
+  const bjOpts = { timeZone: "Asia/Shanghai" };
+  const dStr = d.toLocaleDateString("zh-CN", bjOpts);
+  const nowStr = now.toLocaleDateString("zh-CN", bjOpts);
+  const time = d.toLocaleTimeString("zh-CN", { ...bjOpts, hour: "2-digit", minute: "2-digit" });
+  return dStr === nowStr ? "今天 " + time : d.toLocaleDateString("zh-CN", { ...bjOpts, month: "2-digit", day: "2-digit" }) + " " + time;
+}
+
+function statusBadge(status) {
+  const map = {
+    success: '<span class="badge badge-success">成功</span>',
+    failed: '<span class="badge badge-failed">失败</span>',
+    running: '<span class="badge badge-running">运行中</span>',
+  };
+  return map[status] || '<span class="badge badge-none">未知</span>';
+}
+
+function renderCards(crawlers) {
+  return crawlers.map(c => {
+    const lr = c.lastRun;
+    let lastRunHtml = '<div class="last-run">暂无运行记录</div>';
+    let errorHtml = "";
+
+    if (lr) {
+      lastRunHtml = `<div class="last-run">
+        最近运行: ${formatTime(lr.startedAt)} ${statusBadge(lr.status)}
+        ${lr.recordCount != null ? `<span>${lr.recordCount} 条</span>` : ""}
+        ${lr.durationMs != null ? `<span>${formatDuration(lr.durationMs)}</span>` : ""}
+      </div>`;
+      if (lr.status === "failed" && lr.errorMessage) {
+        const msg = lr.errorMessage.length > 200 ? lr.errorMessage.slice(0, 200) + "..." : lr.errorMessage;
+        errorHtml = `<div class="error-box">${escHtml(msg)}</div>`;
+      }
+    }
+
+    const dates = Object.keys(c.dailySummary).sort();
+    const dots = dates.map(dk => {
+      const d = c.dailySummary[dk];
+      let cls = "gray";
+      if (d.runs > 0) cls = d.failures > 0 ? "red" : "green";
+      const label = dk.slice(5).replace("-", "/");
+      const tip = `${dk}: ${d.runs}次运行, ${d.successes}成功, ${d.failures}失败, ${d.totalRecords}条`;
+      return `<div class="day-cell"><span class="day-label">${label}</span><div class="day-dot ${cls}" data-tip="${tip}"></div></div>`;
+    }).join("");
+
+    return `<div class="card">
+      <div class="card-title">${escHtml(c.label)}</div>
+      ${lastRunHtml}
+      <div class="calendar-strip">${dots}</div>
+      <div class="legend">
+        <span><span class="legend-dot" style="background:var(--green)"></span>全部成功</span>
+        <span><span class="legend-dot" style="background:var(--red)"></span>有失败</span>
+        <span><span class="legend-dot" style="background:#dcdfe6"></span>未运行</span>
+      </div>
+      ${errorHtml}
+    </div>`;
+  }).join("");
+}
+
+function renderLogTable(logs) {
+  if (!logs.length) return '<div class="empty-state">暂无运行日志</div>';
+  const rows = logs.map((l, i) => {
+    const isFailed = l.status === "failed";
+    const rowCls = isFailed ? "failed-row clickable" : l.errorMessage ? "clickable" : "";
+    const row = `<tr class="${rowCls}" ${l.errorMessage ? `onclick="toggleError(${i})"` : ""}>
+      <td>${formatTime(l.startedAt)}</td>
+      <td>${escHtml(l.label)}</td>
+      <td>${TRIGGER_LABELS[l.trigger] || l.trigger}</td>
+      <td>${statusBadge(l.status)}</td>
+      <td>${formatDuration(l.durationMs)}</td>
+      <td>${l.recordCount ?? "-"}</td>
+    </tr>`;
+    const errRow = l.errorMessage
+      ? `<tr class="error-detail" id="err-${i}"><td colspan="6">${escHtml(l.errorMessage)}</td></tr>`
+      : "";
+    return row + errRow;
+  }).join("");
+
+  return `<table class="log-table">
+    <thead><tr><th>时间</th><th>爬虫</th><th>触发</th><th>状态</th><th>耗时</th><th>记录数</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function toggleError(idx) {
+  const el = document.getElementById("err-" + idx);
+  if (el) el.classList.toggle("open");
+}
+
+function escHtml(s) {
+  if (!s) return "";
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+async function loadData() {
+  const btn = document.getElementById("refreshBtn");
+  btn.disabled = true;
+  try {
+    const resp = await fetch("/api/monitor/crawl-status?days=14");
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+
+    document.getElementById("content").innerHTML =
+      renderCards(data.crawlers) +
+      '<div class="card"><div class="card-title">运行日志（最近 50 条）</div>' +
+      renderLogTable(data.recentLogs) +
+      "</div>";
+  } catch (err) {
+    document.getElementById("content").innerHTML =
+      `<div class="card"><div class="error-box">加载失败: ${escHtml(err.message)}</div></div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+loadData();
+autoTimer = setInterval(loadData, 60000);
+</script>
+</body>
+</html>

@@ -97,3 +97,21 @@ CREATE TABLE IF NOT EXISTS station_coords (
   source        TEXT DEFAULT 'gaode',
   updated_at    TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 爬虫运行日志
+CREATE TABLE IF NOT EXISTS crawl_logs (
+  id            SERIAL PRIMARY KEY,
+  crawler       VARCHAR NOT NULL,
+  trigger       VARCHAR NOT NULL,
+  status        VARCHAR NOT NULL,
+  started_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at   TIMESTAMPTZ,
+  duration_ms   INT,
+  record_count  INT DEFAULT 0,
+  error_message TEXT,
+  meta          JSONB DEFAULT '{}',
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_crawl_logs_crawler_started
+  ON crawl_logs(crawler, started_at DESC);

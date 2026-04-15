@@ -86,45 +86,54 @@ function parseBusbossInterval(raw, routeId, tripDate, crawlTime) {
 
 // ── 元数据同步 ──────────────────────────────────────────────
 
-async function syncBusbossMeta() {
-  console.log("[busboss-meta] 同步车盈网城市列表...");
-
-  const cityResult = await busbossGet("/BookSeatsApi/WX_StartCityQuery");
-  if (cityResult.Code !== 200 || !cityResult.Data) {
-    throw new Error(`WX_StartCityQuery failed: ${cityResult.Msg || JSON.stringify(cityResult)}`);
-  }
-
-  const cities = cityResult.Data;
-  for (const c of cities) {
-    const cityId = `bb_${c.CityCode || c.CityID}`;
-    await db.upsertCity(cityId, c.CityName, SOURCE);
-  }
-  console.log(`[busboss-meta] ${cities.length} 个城市已同步`);
-
-  console.log("[busboss-meta] 同步车盈网路线...");
+async function syncBusbossMeta(trigger = "auto") {
+  const logId = await db.startCrawlLog("busboss_sync_meta", trigger).catch(() => null);
+  let cityCount = 0;
   let routeCount = 0;
-  for (let i = 0; i < cities.length; i++) {
-    const c = cities[i];
-    const startCityId = `bb_${c.CityCode || c.CityID}`;
-    try {
-      const endResult = await busbossGet("/BookSeatsApi/WX_ArrivalCityQuery", {
-        startCityId: c.CityCode || c.CityID,
-      });
-      if (endResult.Code === 200 && endResult.Data) {
-        for (const dest of endResult.Data) {
-          const endCityId = `bb_${dest.CityCode || dest.CityID}`;
-          await db.upsertCity(endCityId, dest.CityName, SOURCE);
-          await db.upsertRoute(startCityId, endCityId, SOURCE);
-          routeCount++;
-        }
-      }
-    } catch (err) {
-      console.warn(`[busboss-meta] ${c.CityName} 路线同步失败:`, err.message);
+  try {
+    console.log("[busboss-meta] 同步车盈网城市列表...");
+
+    const cityResult = await busbossGet("/BookSeatsApi/WX_StartCityQuery");
+    if (cityResult.Code !== 200 || !cityResult.Data) {
+      throw new Error(`WX_StartCityQuery failed: ${cityResult.Msg || JSON.stringify(cityResult)}`);
     }
-    if (i % 10 === 0) console.log(`  [${i + 1}/${cities.length}] ${c.CityName}...`);
-    await sleep(300);
+
+    const cities = cityResult.Data;
+    cityCount = cities.length;
+    for (const c of cities) {
+      const cityId = `bb_${c.CityCode || c.CityID}`;
+      await db.upsertCity(cityId, c.CityName, SOURCE);
+    }
+    console.log(`[busboss-meta] ${cities.length} 个城市已同步`);
+
+    console.log("[busboss-meta] 同步车盈网路线...");
+    for (let i = 0; i < cities.length; i++) {
+      const c = cities[i];
+      const startCityId = `bb_${c.CityCode || c.CityID}`;
+      try {
+        const endResult = await busbossGet("/BookSeatsApi/WX_ArrivalCityQuery", {
+          startCityId: c.CityCode || c.CityID,
+        });
+        if (endResult.Code === 200 && endResult.Data) {
+          for (const dest of endResult.Data) {
+            const endCityId = `bb_${dest.CityCode || dest.CityID}`;
+            await db.upsertCity(endCityId, dest.CityName, SOURCE);
+            await db.upsertRoute(startCityId, endCityId, SOURCE);
+            routeCount++;
+          }
+        }
+      } catch (err) {
+        console.warn(`[busboss-meta] ${c.CityName} 路线同步失败:`, err.message);
+      }
+      if (i % 10 === 0) console.log(`  [${i + 1}/${cities.length}] ${c.CityName}...`);
+      await sleep(300);
+    }
+    console.log(`[busboss-meta] ${routeCount} 条路线已同步`);
+    if (logId) await db.finishCrawlLog(logId, routeCount, { cities: cityCount }).catch(() => {});
+  } catch (err) {
+    if (logId) await db.failCrawlLog(logId, err.message).catch(() => {});
+    throw err;
   }
-  console.log(`[busboss-meta] ${routeCount} 条路线已同步`);
 }
 
 // ── 按需实时查询 ────────────────────────────────────────────

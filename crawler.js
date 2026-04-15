@@ -95,36 +95,45 @@ function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 // ── 元数据同步 ──────────────────────────────────────────────
 
-async function syncMeta() {
-  console.log("[meta] 同步城市列表...");
-  const startResult = await requestGETv1("/line/queryStartCity", { line_type: "bus", account: CORP_ID });
-  if (!startResult.success || !startResult.data) throw new Error("queryStartCity failed");
-
-  const cities = startResult.data;
-  for (const c of cities) {
-    await db.upsertCity(c.cityId, c.city || c.cityName);
-  }
-  console.log(`[meta] ${cities.length} 个城市已同步`);
-
-  console.log("[meta] 同步路线...");
+async function syncMeta(trigger = "auto") {
+  const logId = await db.startCrawlLog("yuecx_sync_meta", trigger).catch(() => null);
+  let cityCount = 0;
   let routeCount = 0;
-  for (let i = 0; i < cities.length; i++) {
-    const c = cities[i];
-    const endResult = await requestGETv1("/line/getEndCityList", {
-      startCityId: c.cityId,
-      lineType: "bus",
-    });
-    if (endResult.success && endResult.data) {
-      for (const dest of endResult.data) {
-        await db.upsertCity(dest.cityId, dest.cityName);
-        await db.upsertRoute(c.cityId, dest.cityId);
-        routeCount++;
-      }
+  try {
+    console.log("[meta] 同步城市列表...");
+    const startResult = await requestGETv1("/line/queryStartCity", { line_type: "bus", account: CORP_ID });
+    if (!startResult.success || !startResult.data) throw new Error("queryStartCity failed");
+
+    const cities = startResult.data;
+    cityCount = cities.length;
+    for (const c of cities) {
+      await db.upsertCity(c.cityId, c.city || c.cityName);
     }
-    if (i % 10 === 0) console.log(`  [${i + 1}/${cities.length}] ${c.city || c.cityName}...`);
-    await sleep(200);
+    console.log(`[meta] ${cities.length} 个城市已同步`);
+
+    console.log("[meta] 同步路线...");
+    for (let i = 0; i < cities.length; i++) {
+      const c = cities[i];
+      const endResult = await requestGETv1("/line/getEndCityList", {
+        startCityId: c.cityId,
+        lineType: "bus",
+      });
+      if (endResult.success && endResult.data) {
+        for (const dest of endResult.data) {
+          await db.upsertCity(dest.cityId, dest.cityName);
+          await db.upsertRoute(c.cityId, dest.cityId);
+          routeCount++;
+        }
+      }
+      if (i % 10 === 0) console.log(`  [${i + 1}/${cities.length}] ${c.city || c.cityName}...`);
+      await sleep(200);
+    }
+    console.log(`[meta] ${routeCount} 条路线已同步`);
+    if (logId) await db.finishCrawlLog(logId, routeCount, { cities: cityCount }).catch(() => {});
+  } catch (err) {
+    if (logId) await db.failCrawlLog(logId, err.message).catch(() => {});
+    throw err;
   }
-  console.log(`[meta] ${routeCount} 条路线已同步`);
 }
 
 // ── 按需实时查询单路线单日 ───────────────────────────────────
@@ -223,37 +232,48 @@ function nowBeijing() {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
 }
 
-async function crawlHotRoutes() {
+async function crawlHotRoutes(trigger = "auto") {
+  const logId = await db.startCrawlLog("yuecx_hot_routes", trigger).catch(() => null);
   const today = nowBeijing();
   console.log(`[cron] 开始抓取广深热门路线 (${formatDate(today)}, ${CRAWL_DAYS}天)`);
   let totalCount = 0;
+  const routeStats = [];
 
-  for (const route of HOT_ROUTES) {
-    const routeId = await resolveRouteId(route.startCityId, route.endCityId);
-    for (let i = 0; i < CRAWL_DAYS; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      const date = formatDate(d);
-      try {
-        const intervals = await fetchRouteDayDirect(routeId, route.startCityId, route.endCityId, date);
-        totalCount += intervals.length;
-        if (routeId && intervals.length > 0) {
-          for (const iv of intervals) iv.route_id = routeId;
-          await db.upsertIntervals(intervals);
+  try {
+    for (const route of HOT_ROUTES) {
+      let routeCount = 0;
+      const routeId = await resolveRouteId(route.startCityId, route.endCityId);
+      for (let i = 0; i < CRAWL_DAYS; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        const date = formatDate(d);
+        try {
+          const intervals = await fetchRouteDayDirect(routeId, route.startCityId, route.endCityId, date);
+          totalCount += intervals.length;
+          routeCount += intervals.length;
+          if (routeId && intervals.length > 0) {
+            for (const iv of intervals) iv.route_id = routeId;
+            await db.upsertIntervals(intervals);
+          }
+          console.log(`[cron] ${route.label} ${date}: ${intervals.length} 班次`);
+        } catch (err) {
+          console.error(`[cron] ${route.label} ${date} 失败:`, err.message);
         }
-        console.log(`[cron] ${route.label} ${date}: ${intervals.length} 班次`);
-      } catch (err) {
-        console.error(`[cron] ${route.label} ${date} 失败:`, err.message);
+        await sleep(500);
       }
-      await sleep(500);
+      routeStats.push({ label: route.label, count: routeCount });
     }
+    await db.cleanExpired().catch(() => {});
+    console.log(`[cron] 抓取完成, 共 ${totalCount} 条班次`);
+
+    await geocodeMissingStations().catch((e) => console.error("[cron] geocode站点失败:", e.message));
+
+    if (logId) await db.finishCrawlLog(logId, totalCount, { routes: routeStats }).catch(() => {});
+    return totalCount;
+  } catch (err) {
+    if (logId) await db.failCrawlLog(logId, err.message).catch(() => {});
+    throw err;
   }
-  await db.cleanExpired().catch(() => {});
-  console.log(`[cron] 抓取完成, 共 ${totalCount} 条班次`);
-
-  await geocodeMissingStations().catch((e) => console.error("[cron] geocode站点失败:", e.message));
-
-  return totalCount;
 }
 
 /**

@@ -382,6 +382,55 @@ async function updateOrderStatus(orderId, status, extra = {}) {
   }
 }
 
+// ── Crawl Logs ───────────────────────────────────────────────
+
+async function startCrawlLog(crawler, trigger) {
+  const { rows } = await pool.query(
+    `INSERT INTO crawl_logs (crawler, trigger, status, started_at)
+     VALUES ($1, $2, 'running', NOW())
+     RETURNING id`,
+    [crawler, trigger]
+  );
+  return rows[0].id;
+}
+
+async function finishCrawlLog(logId, recordCount, meta = {}) {
+  await pool.query(
+    `UPDATE crawl_logs
+     SET status = 'success',
+         finished_at = NOW(),
+         duration_ms = EXTRACT(EPOCH FROM (NOW() - started_at))::int * 1000,
+         record_count = $2,
+         meta = $3
+     WHERE id = $1`,
+    [logId, recordCount, JSON.stringify(meta)]
+  );
+}
+
+async function failCrawlLog(logId, errorMessage) {
+  await pool.query(
+    `UPDATE crawl_logs
+     SET status = 'failed',
+         finished_at = NOW(),
+         duration_ms = EXTRACT(EPOCH FROM (NOW() - started_at))::int * 1000,
+         error_message = $2
+     WHERE id = $1`,
+    [logId, errorMessage]
+  );
+}
+
+async function getCrawlLogs(days = 14) {
+  const { rows } = await pool.query(
+    `SELECT id, crawler, trigger, status, started_at, finished_at,
+            duration_ms, record_count, error_message, meta
+     FROM crawl_logs
+     WHERE started_at >= NOW() - make_interval(days => $1)
+     ORDER BY started_at DESC`,
+    [days]
+  );
+  return rows;
+}
+
 async function close() {
   await pool.end();
 }
@@ -393,6 +442,7 @@ module.exports = {
   upsertIntervals, queryIntervals, queryIntervalsByCity, getCacheAge, cleanExpired,
   upsertStationCoord, upsertStationCoordsBatch, getStationCoords, getAllStationNames,
   saveOrder, getOrderById, listOrders, updateOrderStatus,
+  startCrawlLog, finishCrawlLog, failCrawlLog, getCrawlLogs,
   migrate, close,
 };
 
