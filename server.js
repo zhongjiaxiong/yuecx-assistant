@@ -364,7 +364,7 @@ app.get("/api/monitor/crawl-status", async (req, res) => {
       id: l.id,
       crawler: l.crawler,
       label: CRAWLER_LABELS[l.crawler] || l.crawler,
-      trigger: l.trigger,
+      trigger: l.triggered_by,
       status: l.status,
       startedAt: l.started_at,
       finishedAt: l.finished_at,

@@ -384,12 +384,12 @@ async function updateOrderStatus(orderId, status, extra = {}) {
 
 // ── Crawl Logs ───────────────────────────────────────────────
 
-async function startCrawlLog(crawler, trigger) {
+async function startCrawlLog(crawler, triggeredBy) {
   const { rows } = await pool.query(
-    `INSERT INTO crawl_logs (crawler, trigger, status, started_at)
+    `INSERT INTO crawl_logs (crawler, triggered_by, status, started_at)
      VALUES ($1, $2, 'running', NOW())
      RETURNING id`,
-    [crawler, trigger]
+    [crawler, triggeredBy]
   );
   return rows[0].id;
 }
@@ -421,10 +421,10 @@ async function failCrawlLog(logId, errorMessage) {
 
 async function getCrawlLogs(days = 14) {
   const { rows } = await pool.query(
-    `SELECT id, crawler, trigger, status, started_at, finished_at,
+    `SELECT id, crawler, triggered_by, status, started_at, finished_at,
             duration_ms, record_count, error_message, meta
      FROM crawl_logs
-     WHERE started_at >= NOW() - make_interval(days => $1)
+     WHERE started_at >= NOW() - interval '1 day' * $1
      ORDER BY started_at DESC`,
     [days]
   );
