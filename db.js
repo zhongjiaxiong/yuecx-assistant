@@ -382,6 +382,225 @@ async function updateOrderStatus(orderId, status, extra = {}) {
   }
 }
 
+// ── Monitor Dashboard ────────────────────────────────────────
+
+async function getMonitorOverview() {
+  const { rows } = await pool.query(`
+    SELECT
+      (SELECT COUNT(DISTINCT city_id) FROM cities) AS city_count,
+      (SELECT COUNT(*) FROM routes) AS total_route_count,
+      (SELECT COUNT(DISTINCT route_id) FROM intervals WHERE take_date >= CURRENT_DATE AND take_date < CURRENT_DATE + 15) AS active_route_count,
+      (SELECT COUNT(*) FROM intervals WHERE take_date = CURRENT_DATE) AS today_interval_count
+  `);
+  const overview = rows[0];
+
+  const { rows: srcRows } = await pool.query(`
+    SELECT r.source,
+           COUNT(DISTINCT r.id) AS route_count,
+           COUNT(i.id) AS interval_count
+    FROM routes r
+    LEFT JOIN intervals i ON i.route_id = r.id AND i.take_date >= CURRENT_DATE AND i.take_date < CURRENT_DATE + 15
+    GROUP BY r.source
+  `);
+  const sources = {};
+  for (const r of srcRows) {
+    sources[r.source] = { routes: parseInt(r.route_count), intervals: parseInt(r.interval_count) };
+  }
+
+  return {
+    cityCount: parseInt(overview.city_count),
+    totalRouteCount: parseInt(overview.total_route_count),
+    activeRouteCount: parseInt(overview.active_route_count),
+    todayIntervalCount: parseInt(overview.today_interval_count),
+    sources,
+  };
+}
+
+async function getDataCoverage() {
+  const { rows } = await pool.query(`
+    WITH date_range AS (
+      SELECT generate_series(CURRENT_DATE, CURRENT_DATE + 14, '1 day'::interval)::date AS dt
+    ),
+    route_info AS (
+      SELECT r.id, c1.city_name AS start_city, c2.city_name AS end_city,
+             r.source, r.is_hot, r.last_crawl_at
+      FROM routes r
+      JOIN cities c1 ON r.start_city_id = c1.city_id AND r.source = c1.source
+      JOIN cities c2 ON r.end_city_id = c2.city_id AND r.source = c2.source
+    )
+    SELECT ri.id AS route_id, ri.start_city, ri.end_city, ri.source, ri.is_hot,
+           ri.last_crawl_at, d.dt AS take_date, COALESCE(cnt.c, 0) AS interval_count
+    FROM route_info ri
+    CROSS JOIN date_range d
+    LEFT JOIN (
+      SELECT route_id, take_date, COUNT(*) AS c
+      FROM intervals
+      WHERE take_date >= CURRENT_DATE AND take_date < CURRENT_DATE + 15
+      GROUP BY route_id, take_date
+    ) cnt ON cnt.route_id = ri.id AND cnt.take_date = d.dt
+    ORDER BY ri.source, ri.start_city, ri.end_city, d.dt
+  `);
+
+  const dates = [];
+  for (let i = 0; i < 15; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+
+  const routeMap = new Map();
+  for (const r of rows) {
+    const key = r.route_id;
+    if (!routeMap.has(key)) {
+      const hoursAgo = r.last_crawl_at
+        ? Math.round((Date.now() - new Date(r.last_crawl_at).getTime()) / 3600000 * 10) / 10
+        : null;
+      routeMap.set(key, {
+        routeId: r.route_id,
+        startCity: r.start_city,
+        endCity: r.end_city,
+        source: r.source,
+        isHot: r.is_hot,
+        lastCrawlHoursAgo: hoursAgo,
+        counts: [],
+      });
+    }
+    routeMap.get(key).counts.push(parseInt(r.interval_count));
+  }
+
+  const routes = Array.from(routeMap.values())
+    .filter(r => r.counts.some(c => c > 0));
+
+  return { dates, routes };
+}
+
+async function getDataAnomalies() {
+  const anomalies = [];
+
+  const { rows: zeroResidueRows } = await pool.query(`
+    SELECT r.id AS route_id, c1.city_name AS start_city, c2.city_name AS end_city,
+           r.source, i.take_date,
+           COUNT(*) AS total, SUM(CASE WHEN i.residue = 0 THEN 1 ELSE 0 END) AS zero_cnt
+    FROM intervals i
+    JOIN routes r ON i.route_id = r.id
+    JOIN cities c1 ON r.start_city_id = c1.city_id AND r.source = c1.source
+    JOIN cities c2 ON r.end_city_id = c2.city_id AND r.source = c2.source
+    WHERE i.take_date >= CURRENT_DATE AND i.take_date < CURRENT_DATE + 15
+    GROUP BY r.id, c1.city_name, c2.city_name, r.source, i.take_date
+    HAVING SUM(CASE WHEN i.residue = 0 THEN 1 ELSE 0 END) = COUNT(*) AND COUNT(*) >= 3
+  `);
+  for (const r of zeroResidueRows) {
+    anomalies.push({
+      type: "all_zero_residue",
+      severity: "warning",
+      route: `${r.start_city}→${r.end_city}`,
+      source: r.source,
+      date: r.take_date,
+      detail: `${r.take_date} 所有 ${r.total} 个班次余座为 0`,
+    });
+  }
+
+  const { rows: priceRows } = await pool.query(`
+    SELECT c1.city_name AS start_city, c2.city_name AS end_city, r.source,
+           i.take_date, i.from_time, i.price_fen, i.interval_name
+    FROM intervals i
+    JOIN routes r ON i.route_id = r.id
+    JOIN cities c1 ON r.start_city_id = c1.city_id AND r.source = c1.source
+    JOIN cities c2 ON r.end_city_id = c2.city_id AND r.source = c2.source
+    WHERE i.take_date >= CURRENT_DATE AND (i.price_fen = 0 OR i.price_fen > 50000)
+    LIMIT 20
+  `);
+  for (const r of priceRows) {
+    const yuan = (r.price_fen / 100).toFixed(0);
+    anomalies.push({
+      type: "abnormal_price",
+      severity: r.price_fen === 0 ? "danger" : "warning",
+      route: `${r.start_city}→${r.end_city}`,
+      source: r.source,
+      date: r.take_date,
+      detail: `${r.take_date} ${r.from_time} ${r.interval_name || ""} 价格异常: ¥${yuan}`,
+    });
+  }
+
+  const { rows: staleRows } = await pool.query(`
+    SELECT r.id, c1.city_name AS start_city, c2.city_name AS end_city, r.source, r.last_crawl_at
+    FROM routes r
+    JOIN cities c1 ON r.start_city_id = c1.city_id AND r.source = c1.source
+    JOIN cities c2 ON r.end_city_id = c2.city_id AND r.source = c2.source
+    WHERE r.last_crawl_at < NOW() - interval '24 hours'
+      AND EXISTS (SELECT 1 FROM intervals WHERE route_id = r.id AND take_date >= CURRENT_DATE)
+    ORDER BY r.last_crawl_at ASC
+    LIMIT 20
+  `);
+  for (const r of staleRows) {
+    const hoursAgo = Math.round((Date.now() - new Date(r.last_crawl_at).getTime()) / 3600000);
+    anomalies.push({
+      type: "stale_data",
+      severity: hoursAgo > 48 ? "danger" : "warning",
+      route: `${r.start_city}→${r.end_city}`,
+      source: r.source,
+      detail: `已超过 ${hoursAgo} 小时未更新`,
+    });
+  }
+
+  anomalies.sort((a, b) => {
+    const sev = { danger: 0, warning: 1 };
+    return (sev[a.severity] ?? 2) - (sev[b.severity] ?? 2);
+  });
+
+  return anomalies;
+}
+
+async function getCrawlerHealth() {
+  const logs = await getCrawlLogs(7);
+  const crawlerNames = [...new Set(logs.map(l => l.crawler))];
+
+  const crawlers = crawlerNames.map(name => {
+    const myLogs = logs.filter(l => l.crawler === name);
+    const lastRun = myLogs[0] || null;
+
+    let consecutiveFailures = 0;
+    for (const l of myLogs) {
+      if (l.status === "failed") consecutiveFailures++;
+      else break;
+    }
+
+    const recentDurations = myLogs
+      .filter(l => l.status === "success" && l.duration_ms != null)
+      .slice(0, 10)
+      .map(l => l.duration_ms);
+
+    return {
+      name,
+      lastRun: lastRun ? {
+        status: lastRun.status,
+        startedAt: lastRun.started_at,
+        finishedAt: lastRun.finished_at,
+        durationMs: lastRun.duration_ms,
+        recordCount: lastRun.record_count,
+        errorMessage: lastRun.error_message,
+        triggeredBy: lastRun.triggered_by,
+      } : null,
+      consecutiveFailures,
+      recentDurations,
+    };
+  });
+
+  const recentLogs = logs.slice(0, 30).map(l => ({
+    id: l.id,
+    crawler: l.crawler,
+    trigger: l.triggered_by,
+    status: l.status,
+    startedAt: l.started_at,
+    finishedAt: l.finished_at,
+    durationMs: l.duration_ms,
+    recordCount: l.record_count,
+    errorMessage: l.error_message,
+  }));
+
+  return { crawlers, recentLogs };
+}
+
 // ── Crawl Logs ───────────────────────────────────────────────
 
 async function startCrawlLog(crawler, triggeredBy) {
@@ -443,6 +662,7 @@ module.exports = {
   upsertStationCoord, upsertStationCoordsBatch, getStationCoords, getAllStationNames,
   saveOrder, getOrderById, listOrders, updateOrderStatus,
   startCrawlLog, finishCrawlLog, failCrawlLog, getCrawlLogs,
+  getMonitorOverview, getDataCoverage, getDataAnomalies, getCrawlerHealth,
   migrate, close,
 };
 

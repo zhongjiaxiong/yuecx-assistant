@@ -1,14 +1,13 @@
 /**
  * 粤程助手 — Express API 服务
- * POST /api/wx-login              — 微信小程序登录
- * POST /api/wx-bindphone          — 绑定手机号
- * POST /api/chat                  — 对话接口
- * POST /api/stt                   — 语音转文字
- * POST /api/nearby-stations       — 地图定位推荐上车站
- * POST /api/cron/crawl            — 手动触发广深爬虫
- * GET  /                          — 聊天页面
- * GET  /api/health                — 健康检查
- * GET  /api/monitor/crawl-status  — 爬虫运行监控
+ * POST /api/wx-login          — 微信小程序登录
+ * POST /api/wx-bindphone      — 绑定手机号
+ * POST /api/chat              — 对话接口
+ * POST /api/stt               — 语音转文字
+ * POST /api/nearby-stations   — 地图定位推荐上车站
+ * POST /api/cron/crawl        — 手动触发广深爬虫
+ * GET  /                      — 聊天页面
+ * GET  /api/health            — 健康检查
  */
 
 require("dotenv/config");
@@ -302,81 +301,20 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// ── 爬虫运行监控 ────────────────────────────────────────────────
+// ── 监控仪表盘（聚合接口）───────────────────────────────────
 
-const CRAWLER_LABELS = {
-  yuecx_hot_routes: "亿路行 · 广深热门路线",
-  yuecx_sync_meta: "亿路行 · 元数据同步",
-  busboss_sync_meta: "车盈网 · 元数据同步",
-};
-
-app.get("/api/monitor/crawl-status", async (req, res) => {
+app.get("/api/monitor/dashboard", async (req, res) => {
   try {
-    const days = Math.min(Math.max(parseInt(req.query.days) || 14, 1), 90);
-    const logs = await db.getCrawlLogs(days);
-
-    const crawlerNames = Object.keys(CRAWLER_LABELS);
-    const now = new Date();
-    const bjNow = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
-
-    const dateKeys = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(bjNow);
-      d.setDate(bjNow.getDate() - i);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      dateKeys.push(key);
-    }
-
-    const crawlers = crawlerNames.map((name) => {
-      const myLogs = logs.filter((l) => l.crawler === name);
-      const lastRun = myLogs[0] || null;
-
-      const dailySummary = {};
-      for (const dk of dateKeys) {
-        dailySummary[dk] = { runs: 0, successes: 0, failures: 0, totalRecords: 0 };
-      }
-      for (const l of myLogs) {
-        const bjDate = new Date(new Date(l.started_at).toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
-        const dk = `${bjDate.getFullYear()}-${String(bjDate.getMonth() + 1).padStart(2, "0")}-${String(bjDate.getDate()).padStart(2, "0")}`;
-        if (!dailySummary[dk]) continue;
-        dailySummary[dk].runs++;
-        if (l.status === "success") dailySummary[dk].successes++;
-        if (l.status === "failed") dailySummary[dk].failures++;
-        dailySummary[dk].totalRecords += l.record_count || 0;
-      }
-
-      return {
-        name,
-        label: CRAWLER_LABELS[name],
-        lastRun: lastRun ? {
-          status: lastRun.status,
-          startedAt: lastRun.started_at,
-          finishedAt: lastRun.finished_at,
-          durationMs: lastRun.duration_ms,
-          recordCount: lastRun.record_count,
-          errorMessage: lastRun.error_message,
-        } : null,
-        dailySummary,
-      };
-    });
-
-    const recentLogs = logs.slice(0, 50).map((l) => ({
-      id: l.id,
-      crawler: l.crawler,
-      label: CRAWLER_LABELS[l.crawler] || l.crawler,
-      trigger: l.triggered_by,
-      status: l.status,
-      startedAt: l.started_at,
-      finishedAt: l.finished_at,
-      durationMs: l.duration_ms,
-      recordCount: l.record_count,
-      errorMessage: l.error_message,
-    }));
-
-    res.json({ crawlers, recentLogs, queryDays: days });
+    const [overview, coverage, anomalies, crawlerHealth] = await Promise.all([
+      db.getMonitorOverview(),
+      db.getDataCoverage(),
+      db.getDataAnomalies(),
+      db.getCrawlerHealth(),
+    ]);
+    res.json({ overview, coverage, anomalies, crawlerHealth });
   } catch (err) {
-    console.error("[monitor] crawl-status error:", err.message);
-    res.status(500).json({ error: "查询失败" });
+    console.error("[monitor] dashboard error:", err.message);
+    res.status(500).json({ error: "查询失败: " + err.message });
   }
 });
 
@@ -476,7 +414,7 @@ app.post("/api/cron/crawl", async (req, res) => {
     return res.status(403).json({ error: "forbidden" });
   }
   res.json({ status: "started" });
-  crawlHotRoutes("manual_http").catch((e) => console.error("[cron] manual trigger error:", e.message));
+  crawlHotRoutes().catch((e) => console.error("[cron] manual trigger error:", e.message));
 });
 
 app.post("/api/cron/sync-meta", async (req, res) => {
@@ -485,7 +423,7 @@ app.post("/api/cron/sync-meta", async (req, res) => {
     return res.status(403).json({ error: "forbidden" });
   }
   res.json({ status: "started" });
-  syncMeta("manual_http").catch((e) => console.error("[sync-meta] error:", e.message));
+  syncMeta().catch((e) => console.error("[sync-meta] error:", e.message));
 });
 
 function msUntilBeijing(hour, minute) {
@@ -499,7 +437,7 @@ function msUntilBeijing(hour, minute) {
 
 function scheduleDailyCrawl() {
   const run = () => {
-    crawlHotRoutes("daily_cron").catch((e) => console.error("[cron] daily error:", e.message));
+    crawlHotRoutes().catch((e) => console.error("[cron] daily error:", e.message));
     setTimeout(run, msUntilBeijing(6, 0));
   };
   const delay = msUntilBeijing(6, 0);
@@ -510,7 +448,7 @@ function scheduleDailyCrawl() {
 // ── 启动 ──────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API endpoints:`);
   console.log(`  - POST /api/wx-login         微信小程序登录`);
@@ -520,26 +458,18 @@ app.listen(PORT, async () => {
   console.log(`  - POST /api/nearby-stations  地图定位推荐上车站`);
   console.log(`  - POST /api/cron/crawl       手动触发广深爬虫`);
   console.log(`  - GET  /api/health           健康检查`);
-  console.log(`  - GET  /api/monitor/crawl-status  爬虫运行监控`);
-
-  try {
-    await db.migrate();
-    console.log("[startup] 数据库 migration 完成");
-  } catch (e) {
-    console.error("[startup] migration error:", e.message);
-  }
 
   console.log("[startup] 同步所有城市和路线元数据...");
-  syncMeta("startup")
+  syncMeta()
     .then(() => {
       console.log("[startup] 元数据同步完成，开始预热广深数据...");
-      return crawlHotRoutes("startup");
+      return crawlHotRoutes();
     })
     .catch((e) => console.error("[startup] error:", e.message));
 
   // 车盈网: 启动 token 自动续期 + 同步元数据
   startAutoRefresh();
-  syncBusbossMeta("startup").catch((e) => console.error("[busboss] startup meta sync error:", e.message));
+  syncBusbossMeta().catch((e) => console.error("[busboss] startup meta sync error:", e.message));
 
   scheduleDailyCrawl();
 });

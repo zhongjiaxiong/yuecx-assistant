@@ -3,71 +3,128 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>粤程助手 · 爬虫监控</title>
+<title>粤程助手 · 数据监控</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#f5f7fa;--card:#fff;--border:#e4e7ed;--text:#303133;--text-secondary:#909399;
-  --green:#67c23a;--red:#f56c6c;--gray:#c0c4cc;--blue:#409eff;
-  --green-bg:#f0f9eb;--red-bg:#fef0f0;--gray-bg:#f4f4f5;
+  --bg:#f0f2f5;--card:#fff;--border:#e4e7ed;--text:#1d2129;--text-secondary:#86909c;
+  --green:#00b42a;--yellow:#ff7d00;--red:#f53f3f;--blue:#165dff;--gray:#c9cdd4;
+  --green-bg:#e8ffea;--yellow-bg:#fff7e8;--red-bg:#ffece8;--blue-bg:#e8f3ff;--gray-bg:#f2f3f5;
 }
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
-.container{max-width:960px;margin:0 auto;padding:20px 16px}
-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}
-header h1{font-size:20px;font-weight:600}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;font-size:14px}
+.container{max-width:1200px;margin:0 auto;padding:20px 16px}
+
+header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+header h1{font-size:18px;font-weight:600}
 .header-right{display:flex;align-items:center;gap:12px}
-.refresh-btn{background:var(--blue);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:4px}
+.refresh-btn{background:var(--blue);color:#fff;border:none;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:4px;transition:opacity .2s}
 .refresh-btn:hover{opacity:.85}
 .refresh-btn:disabled{opacity:.5;cursor:not-allowed}
 .auto-label{font-size:12px;color:var(--text-secondary)}
-.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px;margin-bottom:16px}
-.card-title{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-.last-run{font-size:13px;color:var(--text-secondary);margin-bottom:14px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:500}
+.updated-at{font-size:12px;color:var(--text-secondary)}
+
+/* Overview cards */
+.overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px}
+.ov-card{background:var(--card);border-radius:10px;padding:16px 18px;border:1px solid var(--border)}
+.ov-card .label{font-size:12px;color:var(--text-secondary);margin-bottom:4px}
+.ov-card .value{font-size:26px;font-weight:700;line-height:1.2}
+.ov-card .sub{font-size:12px;color:var(--text-secondary);margin-top:4px}
+.ov-card .sub b{color:var(--text);font-weight:600}
+
+/* Section */
+.section{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:16px}
+.section-title{font-size:15px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.section-title .count{background:var(--gray-bg);color:var(--text-secondary);font-size:12px;padding:1px 8px;border-radius:10px;font-weight:500}
+
+/* Toolbar */
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.toolbar select,.toolbar input{padding:5px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:#fff;color:var(--text)}
+.toolbar input{width:160px}
+
+/* Coverage matrix */
+.matrix-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.matrix{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+.matrix th,.matrix td{padding:5px 6px;text-align:center;border-bottom:1px solid var(--border)}
+.matrix thead th{position:sticky;top:0;background:var(--card);z-index:2;font-weight:600;color:var(--text-secondary);font-size:11px}
+.matrix th.route-col{text-align:left;min-width:140px;position:sticky;left:0;background:var(--card);z-index:3}
+.matrix td.route-cell{text-align:left;position:sticky;left:0;background:var(--card);z-index:1;font-weight:500}
+.matrix td.route-cell .source-tag{font-size:10px;padding:0 4px;border-radius:3px;margin-left:4px;font-weight:400}
+.matrix td.route-cell .source-tag.yuecx{background:#e8f3ff;color:#165dff}
+.matrix td.route-cell .source-tag.busboss{background:#fff7e8;color:#ff7d00}
+.matrix td.route-cell .hot-star{color:#ff7d00;margin-right:2px}
+.matrix td.route-cell .stale{font-size:10px;color:var(--red);margin-left:4px}
+
+.cell{display:inline-block;min-width:28px;padding:2px 4px;border-radius:4px;font-weight:600;font-size:11px;cursor:default;position:relative}
+.cell.c-green{background:var(--green-bg);color:var(--green)}
+.cell.c-yellow{background:var(--yellow-bg);color:var(--yellow)}
+.cell.c-red{background:var(--red-bg);color:var(--red)}
+.cell.c-gray{background:var(--gray-bg);color:var(--gray)}
+.cell:hover::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#1d2129;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;white-space:nowrap;z-index:20;pointer-events:none;font-weight:400}
+
+.today-col{background:#f7f8fa}
+
+.matrix-legend{font-size:11px;color:var(--text-secondary);display:flex;gap:14px;margin-top:8px;flex-wrap:wrap}
+.matrix-legend span{display:flex;align-items:center;gap:3px}
+.legend-sq{width:12px;height:12px;border-radius:3px;display:inline-block}
+
+/* Anomalies */
+.anomaly-list{display:flex;flex-direction:column;gap:8px}
+.anomaly-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:8px;font-size:13px}
+.anomaly-item.danger{background:var(--red-bg)}
+.anomaly-item.warning{background:var(--yellow-bg)}
+.anomaly-icon{font-size:16px;flex-shrink:0;line-height:1.4}
+.anomaly-body{flex:1}
+.anomaly-body .route-name{font-weight:600}
+.anomaly-body .detail{color:var(--text-secondary);font-size:12px;margin-top:2px}
+.anomaly-empty{text-align:center;padding:20px;color:var(--green);font-size:13px}
+
+/* Crawler health */
+.crawler-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-bottom:12px}
+.crawler-card{border:1px solid var(--border);border-radius:8px;padding:14px;background:#fafbfc}
+.crawler-card.alert{border-color:var(--red);background:var(--red-bg)}
+.crawler-card .name{font-weight:600;font-size:13px;margin-bottom:6px}
+.crawler-card .meta{font-size:12px;color:var(--text-secondary);display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:500}
 .badge-success{background:var(--green-bg);color:var(--green)}
 .badge-failed{background:var(--red-bg);color:var(--red)}
-.badge-running{background:#e6f7ff;color:#409eff}
-.badge-none{background:var(--gray-bg);color:var(--gray)}
-.calendar-strip{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px}
-.day-cell{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:default}
-.day-label{font-size:10px;color:var(--text-secondary)}
-.day-dot{width:14px;height:14px;border-radius:50%;position:relative}
-.day-dot.green{background:var(--green)}
-.day-dot.red{background:var(--red)}
-.day-dot.gray{background:#dcdfe6}
-.day-dot:hover::after{content:attr(data-tip);position:absolute;bottom:20px;left:50%;transform:translateX(-50%);background:#303133;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;white-space:nowrap;z-index:10;pointer-events:none}
-.legend{font-size:11px;color:var(--text-secondary);display:flex;gap:12px;margin-top:4px}
-.legend span{display:flex;align-items:center;gap:3px}
-.legend-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
-.error-box{background:var(--red-bg);border:1px solid #fbc4c4;border-radius:6px;padding:10px 12px;font-size:12px;color:#c45656;margin-top:8px;word-break:break-all}
+.badge-running{background:var(--blue-bg);color:var(--blue)}
+.sparkline{display:inline-flex;align-items:flex-end;gap:1px;height:20px;margin-left:8px;vertical-align:middle}
+.sparkline .bar{width:4px;background:var(--blue);border-radius:1px;min-height:2px}
+.fail-warn{color:var(--red);font-weight:600;font-size:12px}
 
-.log-table{width:100%;border-collapse:collapse;font-size:13px}
-.log-table th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);font-weight:600;color:var(--text-secondary);font-size:12px}
-.log-table td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
+/* Collapsible */
+.collapsible-toggle{background:none;border:1px solid var(--border);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;color:var(--text-secondary);display:flex;align-items:center;gap:4px;margin-top:8px}
+.collapsible-toggle:hover{background:var(--gray-bg)}
+.collapsible-content{display:none;margin-top:12px}
+.collapsible-content.open{display:block}
+
+/* Log table */
+.log-table{width:100%;border-collapse:collapse;font-size:12px}
+.log-table th{text-align:left;padding:6px 8px;border-bottom:2px solid var(--border);font-weight:600;color:var(--text-secondary)}
+.log-table td{padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top}
 .log-table tr.failed-row{background:var(--red-bg)}
-.log-table tr.clickable{cursor:pointer}
-.error-detail{font-size:11px;color:#c45656;padding:4px 10px 8px;word-break:break-all;display:none}
+.error-detail{font-size:11px;color:#c45656;padding:4px 8px;word-break:break-all;display:none}
 .error-detail.open{display:table-row}
 
-.loading{text-align:center;padding:40px;color:var(--text-secondary)}
-.empty-state{text-align:center;padding:30px;color:var(--text-secondary);font-size:14px}
+.loading{text-align:center;padding:60px;color:var(--text-secondary)}
+.error-box{background:var(--red-bg);border:1px solid #fbc4c4;border-radius:6px;padding:12px;font-size:13px;color:#c45656}
 
-@media(max-width:600px){
-  .container{padding:12px 10px}
-  header h1{font-size:17px}
-  .calendar-strip{gap:3px}
-  .day-dot{width:12px;height:12px}
-  .log-table{font-size:12px}
-  .log-table th,.log-table td{padding:6px 6px}
+@media(max-width:640px){
+  .container{padding:12px 8px}
+  header h1{font-size:16px}
+  .overview-grid{grid-template-columns:repeat(2,1fr)}
+  .ov-card .value{font-size:22px}
+  .crawler-grid{grid-template-columns:1fr}
 }
 </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <h1>粤程助手 · 爬虫监控</h1>
+    <h1>粤程助手 · 数据监控</h1>
     <div class="header-right">
-      <span class="auto-label" id="autoLabel">60s 自动刷新</span>
+      <span class="updated-at" id="updatedAt"></span>
+      <span class="auto-label">60s 刷新</span>
       <button class="refresh-btn" id="refreshBtn" onclick="loadData()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         刷新
@@ -78,146 +135,274 @@ header h1{font-size:20px;font-weight:600}
 </div>
 
 <script>
-const TRIGGER_LABELS = {
-  startup: "启动",
-  daily_cron: "定时",
-  manual_http: "手动",
-  github_actions: "CI",
-  auto: "自动",
+const CRAWLER_LABELS = {
+  yuecx_hot_routes: "亿路行 · 热门路线",
+  yuecx_sync_meta: "亿路行 · 元数据同步",
+  busboss_sync_meta: "车盈网 · 元数据同步",
 };
+const SOURCE_LABELS = { yuecx: "粤程", busboss: "车盈网" };
 
-let autoTimer = null;
+function esc(s) {
+  if (!s) return "";
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
 
-function formatDuration(ms) {
+function fmtDuration(ms) {
   if (ms == null) return "-";
   if (ms < 1000) return ms + "ms";
   const s = Math.floor(ms / 1000);
   if (s < 60) return s + "秒";
-  const m = Math.floor(s / 60);
-  const rs = s % 60;
-  return rs > 0 ? m + "分" + rs + "秒" : m + "分";
+  return Math.floor(s / 60) + "分" + (s % 60 > 0 ? s % 60 + "秒" : "");
 }
 
-function formatTime(iso) {
+function fmtTime(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
+  const opts = { timeZone: "Asia/Shanghai" };
+  const time = d.toLocaleTimeString("zh-CN", { ...opts, hour: "2-digit", minute: "2-digit" });
+  const today = new Date().toLocaleDateString("zh-CN", opts);
+  const dStr = d.toLocaleDateString("zh-CN", opts);
+  return dStr === today ? "今天 " + time : d.toLocaleDateString("zh-CN", { ...opts, month: "2-digit", day: "2-digit" }) + " " + time;
+}
+
+function fmtDateShort(dateStr) {
+  const parts = dateStr.split("-");
+  return parts[1] + "/" + parts[2];
+}
+
+function isToday(dateStr) {
   const now = new Date();
-  const bjOpts = { timeZone: "Asia/Shanghai" };
-  const dStr = d.toLocaleDateString("zh-CN", bjOpts);
-  const nowStr = now.toLocaleDateString("zh-CN", bjOpts);
-  const time = d.toLocaleTimeString("zh-CN", { ...bjOpts, hour: "2-digit", minute: "2-digit" });
-  return dStr === nowStr ? "今天 " + time : d.toLocaleDateString("zh-CN", { ...bjOpts, month: "2-digit", day: "2-digit" }) + " " + time;
+  const bj = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+  const todayStr = bj.getFullYear() + "-" + String(bj.getMonth() + 1).padStart(2, "0") + "-" + String(bj.getDate()).padStart(2, "0");
+  return dateStr === todayStr;
 }
 
-function statusBadge(status) {
-  const map = {
-    success: '<span class="badge badge-success">成功</span>',
-    failed: '<span class="badge badge-failed">失败</span>',
-    running: '<span class="badge badge-running">运行中</span>',
-  };
-  return map[status] || '<span class="badge badge-none">未知</span>';
+function weekday(dateStr) {
+  const d = new Date(dateStr + "T00:00:00+08:00");
+  return ["日","一","二","三","四","五","六"][d.getDay()];
 }
 
-function renderCards(crawlers) {
-  return crawlers.map(c => {
-    const lr = c.lastRun;
-    let lastRunHtml = '<div class="last-run">暂无运行记录</div>';
-    let errorHtml = "";
+// ── Render functions ──
 
-    if (lr) {
-      lastRunHtml = `<div class="last-run">
-        最近运行: ${formatTime(lr.startedAt)} ${statusBadge(lr.status)}
-        ${lr.recordCount != null ? `<span>${lr.recordCount} 条</span>` : ""}
-        ${lr.durationMs != null ? `<span>${formatDuration(lr.durationMs)}</span>` : ""}
-      </div>`;
-      if (lr.status === "failed" && lr.errorMessage) {
-        const msg = lr.errorMessage.length > 200 ? lr.errorMessage.slice(0, 200) + "..." : lr.errorMessage;
-        errorHtml = `<div class="error-box">${escHtml(msg)}</div>`;
-      }
-    }
+function renderOverview(ov) {
+  const srcEntries = Object.entries(ov.sources || {});
+  const srcHtml = srcEntries.map(([k, v]) => `<b>${SOURCE_LABELS[k] || k}</b> ${v.routes}线/${v.intervals}班`).join("，");
+  return `<div class="overview-grid">
+    <div class="ov-card"><div class="label">覆盖城市</div><div class="value">${ov.cityCount}</div></div>
+    <div class="ov-card"><div class="label">活跃路线（有未来数据）</div><div class="value">${ov.activeRouteCount}<span style="font-size:14px;color:var(--text-secondary);font-weight:400"> / ${ov.totalRouteCount}</span></div></div>
+    <div class="ov-card"><div class="label">今日班次总量</div><div class="value">${ov.todayIntervalCount}</div></div>
+    <div class="ov-card"><div class="label">数据源分布</div><div class="value" style="font-size:14px;font-weight:500;line-height:1.6;margin-top:4px">${srcHtml || "-"}</div></div>
+  </div>`;
+}
 
-    const dates = Object.keys(c.dailySummary).sort();
-    const dots = dates.map(dk => {
-      const d = c.dailySummary[dk];
-      let cls = "gray";
-      if (d.runs > 0) cls = d.failures > 0 ? "red" : "green";
-      const label = dk.slice(5).replace("-", "/");
-      const tip = `${dk}: ${d.runs}次运行, ${d.successes}成功, ${d.failures}失败, ${d.totalRecords}条`;
-      return `<div class="day-cell"><span class="day-label">${label}</span><div class="day-dot ${cls}" data-tip="${tip}"></div></div>`;
+let currentSourceFilter = "all";
+let currentSearch = "";
+
+function renderCoverage(cov) {
+  const dates = cov.dates || [];
+  let routes = cov.routes || [];
+
+  const toolbar = `<div class="toolbar">
+    <select id="sourceFilter" onchange="applyFilters()">
+      <option value="all">全部数据源</option>
+      <option value="yuecx">粤程</option>
+      <option value="busboss">车盈网</option>
+    </select>
+    <input type="text" id="citySearch" placeholder="搜索城市名..." oninput="applyFilters()">
+  </div>`;
+
+  const thead = `<tr><th class="route-col">路线</th>${dates.map(d =>
+    `<th class="${isToday(d) ? 'today-col' : ''}">${fmtDateShort(d)}<br><span style="font-weight:400">${weekday(d)}</span></th>`
+  ).join("")}</tr>`;
+
+  const tbody = routes.map(r => {
+    const sourceTag = `<span class="source-tag ${r.source}">${SOURCE_LABELS[r.source] || r.source}</span>`;
+    const hotStar = r.isHot ? '<span class="hot-star">★</span>' : '';
+    const stale = r.lastCrawlHoursAgo != null && r.lastCrawlHoursAgo > 24
+      ? `<span class="stale">${Math.round(r.lastCrawlHoursAgo)}h前</span>` : '';
+    const routeLabel = `${hotStar}${esc(r.startCity)}→${esc(r.endCity)}${sourceTag}${stale}`;
+
+    const cells = r.counts.map((c, i) => {
+      let cls = "c-gray";
+      if (c > 10) cls = "c-green";
+      else if (c > 0) cls = "c-yellow";
+      else if (c === 0) cls = "c-red";
+      const tip = `${dates[i]}: ${c} 班次`;
+      const todayCls = isToday(dates[i]) ? ' today-col' : '';
+      return `<td class="${todayCls}"><span class="cell ${cls}" data-tip="${tip}">${c}</span></td>`;
     }).join("");
 
-    return `<div class="card">
-      <div class="card-title">${escHtml(c.label)}</div>
-      ${lastRunHtml}
-      <div class="calendar-strip">${dots}</div>
-      <div class="legend">
-        <span><span class="legend-dot" style="background:var(--green)"></span>全部成功</span>
-        <span><span class="legend-dot" style="background:var(--red)"></span>有失败</span>
-        <span><span class="legend-dot" style="background:#dcdfe6"></span>未运行</span>
+    return `<tr data-source="${r.source}" data-cities="${esc(r.startCity + r.endCity)}"><td class="route-cell">${routeLabel}</td>${cells}</tr>`;
+  }).join("");
+
+  const legend = `<div class="matrix-legend">
+    <span><span class="legend-sq" style="background:var(--green-bg)"></span> >10 班次</span>
+    <span><span class="legend-sq" style="background:var(--yellow-bg)"></span> 1-10 班次</span>
+    <span><span class="legend-sq" style="background:var(--red-bg)"></span> 0 班次</span>
+    <span><span class="legend-sq" style="background:var(--gray-bg)"></span> 无数据</span>
+  </div>`;
+
+  return `<div class="section">
+    <div class="section-title">数据覆盖矩阵 <span class="count">${routes.length} 条路线 × ${dates.length} 天</span></div>
+    ${toolbar}
+    <div class="matrix-wrap"><table class="matrix" id="matrixTable"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>
+    ${legend}
+  </div>`;
+}
+
+function applyFilters() {
+  const source = document.getElementById("sourceFilter").value;
+  const search = document.getElementById("citySearch").value.trim().toLowerCase();
+  const rows = document.querySelectorAll("#matrixTable tbody tr");
+  rows.forEach(tr => {
+    const s = tr.dataset.source;
+    const c = (tr.dataset.cities || "").toLowerCase();
+    const show = (source === "all" || s === source) && (!search || c.includes(search));
+    tr.style.display = show ? "" : "none";
+  });
+}
+
+function renderAnomalies(anomalies) {
+  if (!anomalies || anomalies.length === 0) {
+    return `<div class="section">
+      <div class="section-title">数据异常告警</div>
+      <div class="anomaly-empty">✓ 暂无异常，一切正常</div>
+    </div>`;
+  }
+
+  const icons = { danger: "🔴", warning: "🟡" };
+  const typeLabels = {
+    all_zero_residue: "余座全零",
+    abnormal_price: "价格异常",
+    stale_data: "数据过期",
+    count_drop: "班次骤降",
+  };
+
+  const items = anomalies.slice(0, 30).map(a => `
+    <div class="anomaly-item ${a.severity}">
+      <span class="anomaly-icon">${icons[a.severity] || "⚠️"}</span>
+      <div class="anomaly-body">
+        <span class="route-name">${esc(a.route)}</span>
+        <span style="color:var(--text-secondary);font-size:12px;margin-left:6px">[${typeLabels[a.type] || a.type}]</span>
+        <span style="font-size:11px;color:var(--text-secondary);margin-left:4px">${SOURCE_LABELS[a.source] || ""}</span>
+        <div class="detail">${esc(a.detail)}</div>
       </div>
-      ${errorHtml}
+    </div>
+  `).join("");
+
+  return `<div class="section">
+    <div class="section-title">数据异常告警 <span class="count">${anomalies.length}</span></div>
+    <div class="anomaly-list">${items}</div>
+  </div>`;
+}
+
+function renderCrawlerHealth(health) {
+  const crawlers = health.crawlers || [];
+  const recentLogs = health.recentLogs || [];
+
+  const cards = crawlers.map(c => {
+    const label = CRAWLER_LABELS[c.name] || c.name;
+    const isAlert = c.consecutiveFailures >= 2;
+    const lr = c.lastRun;
+
+    let statusBadge = '<span class="badge" style="background:var(--gray-bg);color:var(--gray)">无记录</span>';
+    if (lr) {
+      const map = {
+        success: '<span class="badge badge-success">成功</span>',
+        failed: '<span class="badge badge-failed">失败</span>',
+        running: '<span class="badge badge-running">运行中</span>',
+      };
+      statusBadge = map[lr.status] || statusBadge;
+    }
+
+    const maxDur = Math.max(...(c.recentDurations || [1]), 1);
+    const sparkBars = (c.recentDurations || []).map(d =>
+      `<span class="bar" style="height:${Math.max(2, Math.round(d / maxDur * 20))}px" title="${fmtDuration(d)}"></span>`
+    ).join("");
+    const sparkHtml = sparkBars ? `<span class="sparkline">${sparkBars}</span>` : "";
+
+    const failWarn = c.consecutiveFailures >= 2
+      ? `<span class="fail-warn">连续失败 ${c.consecutiveFailures} 次!</span>` : "";
+
+    return `<div class="crawler-card${isAlert ? ' alert' : ''}">
+      <div class="name">${esc(label)}</div>
+      <div class="meta">
+        ${statusBadge}
+        ${lr ? `<span>${fmtTime(lr.startedAt)}</span>` : ""}
+        ${lr?.recordCount != null ? `<span>${lr.recordCount}条</span>` : ""}
+        ${lr?.durationMs != null ? `<span>${fmtDuration(lr.durationMs)}</span>` : ""}
+        ${sparkHtml}
+        ${failWarn}
+      </div>
     </div>`;
   }).join("");
-}
 
-function renderLogTable(logs) {
-  if (!logs.length) return '<div class="empty-state">暂无运行日志</div>';
-  const rows = logs.map((l, i) => {
+  const logRows = recentLogs.map((l, i) => {
     const isFailed = l.status === "failed";
-    const rowCls = isFailed ? "failed-row clickable" : l.errorMessage ? "clickable" : "";
-    const row = `<tr class="${rowCls}" ${l.errorMessage ? `onclick="toggleError(${i})"` : ""}>
-      <td>${formatTime(l.startedAt)}</td>
-      <td>${escHtml(l.label)}</td>
-      <td>${TRIGGER_LABELS[l.trigger] || l.trigger}</td>
-      <td>${statusBadge(l.status)}</td>
-      <td>${formatDuration(l.durationMs)}</td>
+    const statusMap = {
+      success: '<span class="badge badge-success">成功</span>',
+      failed: '<span class="badge badge-failed">失败</span>',
+      running: '<span class="badge badge-running">运行中</span>',
+    };
+    const row = `<tr class="${isFailed ? 'failed-row' : ''}" ${l.errorMessage ? `style="cursor:pointer" onclick="toggleErr(${i})"` : ""}>
+      <td>${fmtTime(l.startedAt)}</td>
+      <td>${esc(CRAWLER_LABELS[l.crawler] || l.crawler)}</td>
+      <td>${statusMap[l.status] || l.status}</td>
+      <td>${fmtDuration(l.durationMs)}</td>
       <td>${l.recordCount ?? "-"}</td>
     </tr>`;
-    const errRow = l.errorMessage
-      ? `<tr class="error-detail" id="err-${i}"><td colspan="6">${escHtml(l.errorMessage)}</td></tr>`
-      : "";
-    return row + errRow;
+    const err = l.errorMessage ? `<tr class="error-detail" id="err-${i}"><td colspan="5" style="color:#c45656;font-size:11px">${esc(l.errorMessage)}</td></tr>` : "";
+    return row + err;
   }).join("");
 
-  return `<table class="log-table">
-    <thead><tr><th>时间</th><th>爬虫</th><th>触发</th><th>状态</th><th>耗时</th><th>记录数</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>`;
+  return `<div class="section">
+    <div class="section-title">爬虫运行健康度</div>
+    <div class="crawler-grid">${cards}</div>
+    <button class="collapsible-toggle" onclick="toggleLogs()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+      查看详细日志（最近 30 条）
+    </button>
+    <div class="collapsible-content" id="logPanel">
+      ${logRows ? `<table class="log-table"><thead><tr><th>时间</th><th>爬虫</th><th>状态</th><th>耗时</th><th>记录数</th></tr></thead><tbody>${logRows}</tbody></table>` : '<div style="text-align:center;color:var(--text-secondary);padding:16px">暂无日志</div>'}
+    </div>
+  </div>`;
 }
 
-function toggleError(idx) {
-  const el = document.getElementById("err-" + idx);
+function toggleLogs() {
+  document.getElementById("logPanel").classList.toggle("open");
+}
+function toggleErr(i) {
+  const el = document.getElementById("err-" + i);
   if (el) el.classList.toggle("open");
-}
-
-function escHtml(s) {
-  if (!s) return "";
-  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 async function loadData() {
   const btn = document.getElementById("refreshBtn");
   btn.disabled = true;
   try {
-    const resp = await fetch("/api/monitor/crawl-status?days=14");
+    const resp = await fetch("/api/monitor/dashboard");
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     const data = await resp.json();
 
     document.getElementById("content").innerHTML =
-      renderCards(data.crawlers) +
-      '<div class="card"><div class="card-title">运行日志（最近 50 条）</div>' +
-      renderLogTable(data.recentLogs) +
-      "</div>";
+      renderOverview(data.overview) +
+      renderCoverage(data.coverage) +
+      renderAnomalies(data.anomalies) +
+      renderCrawlerHealth(data.crawlerHealth);
+
+    const now = new Date();
+    document.getElementById("updatedAt").textContent =
+      "更新于 " + now.toLocaleTimeString("zh-CN", { timeZone: "Asia/Shanghai", hour: "2-digit", minute: "2-digit", second: "2-digit" });
   } catch (err) {
     document.getElementById("content").innerHTML =
-      `<div class="card"><div class="error-box">加载失败: ${escHtml(err.message)}</div></div>`;
+      `<div class="section"><div class="error-box">加载失败: ${esc(err.message)}</div></div>`;
   } finally {
     btn.disabled = false;
   }
 }
 
 loadData();
-autoTimer = setInterval(loadData, 60000);
+setInterval(loadData, 60000);
 </script>
 </body>
 </html>
