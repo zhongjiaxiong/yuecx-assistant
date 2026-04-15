@@ -125,6 +125,16 @@ Page({
 
   // ── 消息解析 ──────────────────────────────────────
 
+  _sanitize(text) {
+    return text
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/(?<!\[)\[([^\]]+)\]\(https?:\/\/[^)]*\)/g, '$1')
+      .replace(/(^|[\s，。！？、])https?:\/\/\S+/g, '$1')
+      .replace(/ {2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  },
+
   _parseReply(reply) {
     const segments = [];
     let remaining = reply;
@@ -153,7 +163,7 @@ Page({
     let cursor = 0;
     for (const match of matches) {
       if (match.start > cursor) {
-        const text = remaining.slice(cursor, match.start).trim();
+        const text = this._sanitize(remaining.slice(cursor, match.start));
         if (text) segments.push({ type: 'text', content: text });
       }
       segments.push({ type: match.type, data: match.data });
@@ -161,7 +171,7 @@ Page({
     }
 
     if (cursor < remaining.length) {
-      const text = remaining.slice(cursor).trim();
+      const text = this._sanitize(remaining.slice(cursor));
       if (text) segments.push({ type: 'text', content: text });
     }
 

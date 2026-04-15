@@ -42,17 +42,24 @@ function buildSystemPrompt() {
 7. 结果中 matchedDropoff 是离目的地最近的下车站，dropoffDistMeters 是距离（米）
 8. 告知用户: "离你最近的上车站是XX（约1.2km），离天河体育中心最近的下车站是YY（约800m）"
 
+典型流程（用户说"我要去广州"，没提日期和时间）:
+1. 立即调 get_user_location → 获取 city="深圳"、district="南山"
+2. 用户没说日期 → 默认今天；没说时间偏好 → timeMode=asap
+3. 三要素齐了: 出发=深圳、到达=广州、日期=今天
+4. 调 score_and_rank(startCity="深圳", endCity="广州", date="${dateStr}", timeMode="asap", targetTime="${timeStr}")
+
 ⚡ 效率规则:
 - 已有 GPS → 不要问出发城市/区域，直接用
 - 用户说了日期 → 不要再问
 - 用户说了"明天""今天""下周一" → 转换为具体日期
-- 用户没说日期 → 只需问"哪天走？"
+- 用户没说日期 → 默认今天，timeMode=asap（尽快出发）
 - 收齐出发城市+到达城市+日期后直接调 score_and_rank
 - 不要先调 search_intervals 再调 score_and_rank
 - ⚠ get_user_location 整个对话只调一次，后续复用结果
 
 信息收集:
-- 必需三要素: 出发城市（GPS 自动获取）、到达城市（用户说）、日期（用户说或推断）
+- 必需三要素: 出发城市（GPS 自动获取）、到达城市（用户说）、日期（用户说或推断，未提及则默认今天）
+- 用户只说了目的地没说日期 → 日期=今天、timeMode=asap，无需追问直接查
 - 缺什么问什么，一句话问齐
 - 用户说了具体目的地/地标 → preferDropoff=["地标名"]（系统自动 geocode 排距离）
 - 用户只说了区名（如"天河"） → preferDropoff=["天河"]（按关键词匹配）
@@ -74,7 +81,8 @@ score_and_rank 用法:
 - 如果结果为空: 全部过时 → 建议看明天; 全部售罄 → 建议其他日期
 
 订票: 用户说"订第X班" → 调 book_interval → [BOOKING_CARD:JSON] 输出
-示例: [BOOKING_CARD:{"route":"深圳→广州","date":"2026-04-14","fromTime":"08:30","boardingTime":"08:45","boardingStation":"深大地铁站","dropoffStation":"体育西路","priceYuan":"50.00","residue":8}]
+⚠ BOOKING_CARD 必须包含 book_interval 返回的所有字段（特别是 miniappAppId、miniappPath），直接透传 data 对象的全部字段。
+示例: [BOOKING_CARD:{"route":"深圳→广州","date":"2026-04-14","fromTime":"08:30","boardingTime":"08:45","boardingStation":"深大地铁站","dropoffStation":"体育西路","priceYuan":"50.00","residue":8,"source":"yuecx","miniappAppId":"wx44d254291f27af7c","miniappPath":"/package/interval2/pages/interval2/interval2?corpid=ycx&tripDate=2026-04-14&beginCityCode=4403&beginCityName=%E6%B7%B1%E5%9C%B3&endCityCode=4401&endCityName=%E5%B9%BF%E5%B7%9E"}]
 
 📍 定位能力:
 - get_user_location: 解析 GPS → 城市/区/街道。整个对话只调一次。
@@ -82,6 +90,8 @@ score_and_rank 用法:
 - 下车距离: 用户说了目的地关键词就传 preferDropoff，系统自动 geocode + 距离排序。
 - suggest_boarding: 可选，用于更精确的站点排序。
 - 定位失败（needAsk=true）时才追问出发区域。
+
+⚠ 绝对不要在回复中输出图片、链接或 URL（包括 markdown 图片语法 ![](url)、超链接 [text](url)、裸 URL）。只用纯文本。
 
 简洁友好，不暴露内部 ID。`;
 }
@@ -150,12 +160,46 @@ function buildCardFromToolResult(parsed) {
   };
 }
 
+function sanitizeReply(text) {
+  return text
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .replace(/(?<!\[)\[([^\]]+)\]\(https?:\/\/[^)]*\)/g, "$1")
+    .replace(/(^|[\s，。！？、])https?:\/\/\S+/g, "$1")
+    .replace(/ {2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function ensureBookingCardFields(reply, lastBookingData) {
+  if (!lastBookingData || !reply.includes("[BOOKING_CARD:")) return reply;
+
+  return reply.replace(/\[BOOKING_CARD:([\s\S]*?)\]/g, (match, jsonStr) => {
+    try {
+      const card = JSON.parse(jsonStr);
+      if (!card.miniappAppId && lastBookingData.miniappAppId) {
+        card.miniappAppId = lastBookingData.miniappAppId;
+      }
+      if (!card.miniappPath && lastBookingData.miniappPath) {
+        card.miniappPath = lastBookingData.miniappPath;
+      }
+      if (!card.source && lastBookingData.source) {
+        card.source = lastBookingData.source;
+      }
+      return `[BOOKING_CARD:${JSON.stringify(card)}]`;
+    } catch {
+      return match;
+    }
+  });
+}
+
 async function chat(messages, userId, ctx, onProgress, onCardReady) {
   if (messages[0]?.role !== "system") {
     messages.unshift({ role: "system", content: buildSystemPrompt() });
   }
 
   if (onProgress) onProgress("thinking");
+
+  let lastBookingData = null;
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     const result = await callLLM(messages);
@@ -166,7 +210,8 @@ async function chat(messages, userId, ctx, onProgress, onCardReady) {
     messages.push(msg);
 
     if (!msg.tool_calls || msg.tool_calls.length === 0) {
-      return msg.content || "";
+      const reply = msg.content || "";
+      return sanitizeReply(ensureBookingCardFields(reply, lastBookingData));
     }
 
     const toolCalls = msg.tool_calls;
@@ -187,6 +232,14 @@ async function chat(messages, userId, ctx, onProgress, onCardReady) {
           const parsed = JSON.parse(tr.content);
           if (parsed.success && parsed.results && parsed.results.length > 0) {
             onCardReady(buildCardFromToolResult(parsed));
+          }
+        } catch (_) {}
+      }
+      if (tr.name === "book_interval") {
+        try {
+          const parsed = JSON.parse(tr.content);
+          if (parsed.success && parsed.data) {
+            lastBookingData = parsed.data;
           }
         } catch (_) {}
       }

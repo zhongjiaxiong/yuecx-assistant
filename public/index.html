@@ -534,7 +534,18 @@
 
   function esc(s) { var d = document.createElement('span'); d.textContent = s; return d.innerHTML; }
 
+  function sanitizeBotText(t) {
+    return t
+      .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]+)\]\(https?:\/\/[^)]*\)/g, '$1')
+      .replace(/(^|[\s，。！？、])https?:\/\/\S+/g, '$1')
+      .replace(/ {2,}/g, ' ')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
   function renderBotContent(text) {
+    text = sanitizeBotText(text);
     var frag = document.createDocumentFragment();
     var tags = ['ROUTE_RESULTS', 'BOOKING_CARD'];
     var pos = 0;

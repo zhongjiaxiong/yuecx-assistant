@@ -417,6 +417,18 @@ async function bookInterval({ date, startCity, endCity, intervalId, boardingStat
 
   const miniappName = MINIAPP_NAMES[matchedSource] || MINIAPP_NAME;
 
+  const miniappPathParams = new URLSearchParams({
+    corpid: "ycx",
+    tripDate: date,
+    beginCityCode: start.city_id,
+    beginCityName: start.city_name,
+    endCityCode: end.city_id,
+    endCityName: end.city_name,
+  });
+  const miniappPath = matchedSource === "yuecx"
+    ? `/package/interval2/pages/interval2/interval2?${miniappPathParams.toString()}`
+    : "";
+
   return {
     success: true,
     data: {
@@ -432,6 +444,12 @@ async function bookInterval({ date, startCity, endCity, intervalId, boardingStat
       miniappName,
       source: matchedSource,
       sourceName: SOURCE_LABELS[matchedSource] || matchedSource,
+      startCityId: start.city_id,
+      startCityName: start.city_name,
+      endCityId: end.city_id,
+      endCityName: end.city_name,
+      miniappAppId: matchedSource === "yuecx" ? "wx44d254291f27af7c" : "",
+      miniappPath,
     },
   };
 }

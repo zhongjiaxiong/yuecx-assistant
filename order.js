@@ -147,7 +147,10 @@ async function createOrder(orderData) {
     miniapp: {
       name: source === "yuecx" ? "粤出行城际巴士" : "如约城际巴士",
       appId: source === "yuecx" ? "wx44d254291f27af7c" : "wx1487...",
-      path: generateMiniappPath(source, intervalId, date),
+      path: generateMiniappPath(source, {
+        intervalId, date, startCityId: orderData.startCityId,
+        startCityName: startCity, endCityId: orderData.endCityId, endCityName: endCity,
+      }),
     },
   };
 
@@ -180,10 +183,19 @@ async function createOrder(orderData) {
 
 /**
  * 生成小程序跳转路径
+ * 粤出行使用 interval2 班次列表页，参数从逆向的 app-service.js 中提取
  */
-function generateMiniappPath(source, intervalId, date) {
+function generateMiniappPath(source, { intervalId, date, startCityId, startCityName, endCityId, endCityName } = {}) {
   if (source === "yuecx") {
-    return `pages/intervalDetail/index?id=${intervalId}&date=${date}`;
+    const params = new URLSearchParams({
+      corpid: "ycx",
+      tripDate: date,
+      beginCityCode: startCityId || "",
+      beginCityName: startCityName || "",
+      endCityCode: endCityId || "",
+      endCityName: endCityName || "",
+    });
+    return `/package/interval2/pages/interval2/interval2?${params.toString()}`;
   } else if (source === "busboss") {
     return `pages/booking/index?lineClassDayGID=${intervalId}&classDate=${date}`;
   }
