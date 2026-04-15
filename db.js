@@ -106,6 +106,30 @@ async function getAllRoutes() {
   return rows;
 }
 
+async function getRoutesBySource(source) {
+  const { rows } = await pool.query(
+    `SELECT r.id, r.start_city_id, r.end_city_id,
+            c1.city_name as start_name, c2.city_name as end_name
+     FROM routes r
+     JOIN cities c1 ON r.start_city_id = c1.city_id AND r.source = c1.source
+     JOIN cities c2 ON r.end_city_id = c2.city_id AND r.source = c2.source
+     WHERE r.source = $1
+     ORDER BY r.id`,
+    [source]
+  );
+  return rows;
+}
+
+async function getLastCrawlTime(crawlerName) {
+  const { rows } = await pool.query(
+    `SELECT started_at FROM crawl_logs
+     WHERE crawler = $1 AND status = 'success'
+     ORDER BY started_at DESC LIMIT 1`,
+    [crawlerName]
+  );
+  return rows[0]?.started_at || null;
+}
+
 async function getDestinations(startCityName) {
   const { rows } = await pool.query(
     `SELECT c2.city_id, c2.city_name
@@ -657,7 +681,7 @@ async function close() {
 module.exports = {
   pool,
   upsertCity, findCityByName, findCityByNameAndSource, getAllCities,
-  upsertRoute, getRouteId, getHotRoutes, getAllRoutes, getDestinations, updateRouteLastCrawl,
+  upsertRoute, getRouteId, getHotRoutes, getAllRoutes, getRoutesBySource, getDestinations, updateRouteLastCrawl, getLastCrawlTime,
   upsertIntervals, queryIntervals, queryIntervalsByCity, getCacheAge, cleanExpired,
   upsertStationCoord, upsertStationCoordsBatch, getStationCoords, getAllStationNames,
   saveOrder, getOrderById, listOrders, updateOrderStatus,

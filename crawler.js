@@ -216,13 +216,10 @@ async function crawlOnDemand(startCityId, endCityId, date) {
   return intervals;
 }
 
-// ── 广深热门路线定时抓取 ──────────────────────────────────────
+// ── 全量路线定时抓取 ──────────────────────────────────────────
 
-const HOT_ROUTES = [
-  { startCityId: "020", endCityId: "440300", label: "广州→深圳" },
-  { startCityId: "440300", endCityId: "020", label: "深圳→广州" },
-];
 const CRAWL_DAYS = 15;
+const CONCURRENCY = 5;
 
 function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -232,43 +229,59 @@ function nowBeijing() {
   return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
 }
 
-async function crawlHotRoutes(trigger = "auto") {
-  const logId = await db.startCrawlLog("yuecx_hot_routes", trigger).catch(() => null);
+async function crawlAllRoutes(trigger = "auto") {
+  const logId = await db.startCrawlLog("yuecx_all_routes", trigger).catch(() => null);
   const today = nowBeijing();
-  console.log(`[cron] 开始抓取广深热门路线 (${formatDate(today)}, ${CRAWL_DAYS}天)`);
-  let totalCount = 0;
-  const routeStats = [];
 
   try {
-    for (const route of HOT_ROUTES) {
-      let routeCount = 0;
-      const routeId = await resolveRouteId(route.startCityId, route.endCityId);
+    const routes = await db.getRoutesBySource("yuecx");
+    console.log(`[yuecx-crawl] 开始抓取全部 ${routes.length} 条粤程路线 × ${CRAWL_DAYS} 天`);
+
+    const tasks = [];
+    for (const route of routes) {
       for (let i = 0; i < CRAWL_DAYS; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() + i);
-        const date = formatDate(d);
-        try {
-          const intervals = await fetchRouteDayDirect(routeId, route.startCityId, route.endCityId, date);
-          totalCount += intervals.length;
-          routeCount += intervals.length;
-          if (routeId && intervals.length > 0) {
-            for (const iv of intervals) iv.route_id = routeId;
-            await db.upsertIntervals(intervals);
-          }
-          console.log(`[cron] ${route.label} ${date}: ${intervals.length} 班次`);
-        } catch (err) {
-          console.error(`[cron] ${route.label} ${date} 失败:`, err.message);
-        }
-        await sleep(500);
+        tasks.push({ route, date: formatDate(d) });
       }
-      routeStats.push({ label: route.label, count: routeCount });
     }
+
+    let totalCount = 0;
+    let completed = 0;
+    const total = tasks.length;
+
+    async function worker(queue) {
+      while (queue.length > 0) {
+        const task = queue.shift();
+        if (!task) break;
+        try {
+          const intervals = await fetchRouteDayDirect(
+            task.route.id, task.route.start_city_id, task.route.end_city_id, task.date
+          );
+          if (intervals.length > 0) {
+            for (const iv of intervals) iv.route_id = task.route.id;
+            await db.upsertIntervals(intervals);
+            totalCount += intervals.length;
+          }
+        } catch (err) {
+          // skip individual failures
+        }
+        completed++;
+        if (completed % 100 === 0 || completed === total) {
+          console.log(`[yuecx-crawl] ${completed}/${total} (${Math.round(completed / total * 100)}%) — ${totalCount} 班次`);
+        }
+        await sleep(300);
+      }
+    }
+
+    const workers = Array.from({ length: CONCURRENCY }, () => worker(tasks));
+    await Promise.all(workers);
+
     await db.cleanExpired().catch(() => {});
-    console.log(`[cron] 抓取完成, 共 ${totalCount} 条班次`);
+    await geocodeMissingStations().catch((e) => console.error("[yuecx-crawl] geocode失败:", e.message));
 
-    await geocodeMissingStations().catch((e) => console.error("[cron] geocode站点失败:", e.message));
-
-    if (logId) await db.finishCrawlLog(logId, totalCount, { routes: routeStats }).catch(() => {});
+    console.log(`[yuecx-crawl] 完成: ${routes.length} 路线, ${totalCount} 班次`);
+    if (logId) await db.finishCrawlLog(logId, totalCount, { routeCount: routes.length }).catch(() => {});
     return totalCount;
   } catch (err) {
     if (logId) await db.failCrawlLog(logId, err.message).catch(() => {});
@@ -333,7 +346,7 @@ async function geocodeMissingStations() {
   }
 }
 
-module.exports = { requestGETv1, getChallengeHeaders, crawlOnDemand, syncMeta, crawlHotRoutes };
+module.exports = { requestGETv1, getChallengeHeaders, crawlOnDemand, syncMeta, crawlAllRoutes };
 
 // ── CLI ─────────────────────────────────────────────────────
 

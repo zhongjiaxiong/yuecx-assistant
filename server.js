@@ -5,7 +5,7 @@
  * POST /api/chat              — 对话接口
  * POST /api/stt               — 语音转文字
  * POST /api/nearby-stations   — 地图定位推荐上车站
- * POST /api/cron/crawl        — 手动触发广深爬虫
+ * POST /api/cron/crawl        — 手动触发全量爬虫
  * GET  /                      — 聊天页面
  * GET  /api/health            — 健康检查
  */
@@ -16,8 +16,8 @@ const path = require("path");
 const multer = require("multer");
 const jwt = require("jsonwebtoken");
 const { chat, buildSystemPrompt } = require("./agent");
-const { crawlHotRoutes, crawlOnDemand, syncMeta } = require("./crawler");
-const { syncBusbossMeta } = require("./busboss_crawler");
+const { crawlAllRoutes, crawlOnDemand, syncMeta } = require("./crawler");
+const { syncBusbossMeta, crawlBusbossAllRoutes } = require("./busboss_crawler");
 const { startAutoRefresh } = require("./token_manager");
 const gaodeMap = require("./gaode-map");
 const db = require("./db");
@@ -406,7 +406,7 @@ app.post("/api/nearby-stations", async (req, res) => {
   }
 });
 
-// ── 定时爬虫（广深）────────────────────────────────────────────
+// ── 定时爬虫（全量）────────────────────────────────────────────
 
 app.post("/api/cron/crawl", async (req, res) => {
   const secret = req.headers["x-cron-secret"] || req.query.secret;
@@ -414,7 +414,7 @@ app.post("/api/cron/crawl", async (req, res) => {
     return res.status(403).json({ error: "forbidden" });
   }
   res.json({ status: "started" });
-  crawlHotRoutes().catch((e) => console.error("[cron] manual trigger error:", e.message));
+  runFullCrawl("http").catch((e) => console.error("[cron] manual trigger error:", e.message));
 });
 
 app.post("/api/cron/sync-meta", async (req, res) => {
@@ -425,6 +425,29 @@ app.post("/api/cron/sync-meta", async (req, res) => {
   res.json({ status: "started" });
   syncMeta().catch((e) => console.error("[sync-meta] error:", e.message));
 });
+
+async function runFullCrawl(trigger = "auto") {
+  console.log("[crawl] === 开始全量数据抓取 ===");
+  const t0 = Date.now();
+  try {
+    await syncMeta();
+    await syncBusbossMeta(trigger);
+  } catch (e) {
+    console.error("[crawl] 元数据同步失败:", e.message);
+  }
+  try {
+    await crawlAllRoutes(trigger);
+  } catch (e) {
+    console.error("[crawl] 粤程路线抓取失败:", e.message);
+  }
+  try {
+    await crawlBusbossAllRoutes(trigger);
+  } catch (e) {
+    console.error("[crawl] 车盈网路线抓取失败:", e.message);
+  }
+  const min = Math.round((Date.now() - t0) / 60000);
+  console.log(`[crawl] === 全量抓取完成, 耗时 ${min} 分钟 ===`);
+}
 
 function msUntilBeijing(hour, minute) {
   const now = new Date();
@@ -437,39 +460,38 @@ function msUntilBeijing(hour, minute) {
 
 function scheduleDailyCrawl() {
   const run = () => {
-    crawlHotRoutes().catch((e) => console.error("[cron] daily error:", e.message));
+    runFullCrawl("cron").catch((e) => console.error("[cron] daily error:", e.message));
     setTimeout(run, msUntilBeijing(6, 0));
   };
   const delay = msUntilBeijing(6, 0);
-  console.log(`[cron] 下次广深定时抓取: ${Math.round(delay / 60000)} 分钟后`);
+  console.log(`[cron] 下次全量定时抓取: ${Math.round(delay / 60000)} 分钟后 (北京时间 06:00)`);
   setTimeout(run, delay);
 }
 
 // ── 启动 ──────────────────────────────────────────────────────
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
-  console.log(`API endpoints:`);
-  console.log(`  - POST /api/wx-login         微信小程序登录`);
-  console.log(`  - POST /api/wx-bindphone     绑定手机号`);
-  console.log(`  - POST /api/chat             对话接口`);
-  console.log(`  - POST /api/stt              语音转文字`);
-  console.log(`  - POST /api/nearby-stations  地图定位推荐上车站`);
-  console.log(`  - POST /api/cron/crawl       手动触发广深爬虫`);
-  console.log(`  - GET  /api/health           健康检查`);
 
-  console.log("[startup] 同步所有城市和路线元数据...");
-  syncMeta()
-    .then(() => {
-      console.log("[startup] 元数据同步完成，开始预热广深数据...");
-      return crawlHotRoutes();
-    })
-    .catch((e) => console.error("[startup] error:", e.message));
+  await db.migrate().catch((e) => console.error("[startup] migrate error:", e.message));
 
-  // 车盈网: 启动 token 自动续期 + 同步元数据
   startAutoRefresh();
-  syncBusbossMeta().catch((e) => console.error("[busboss] startup meta sync error:", e.message));
+
+  const lastYuecx = await db.getLastCrawlTime("yuecx_all_routes").catch(() => null);
+  const lastBusboss = await db.getLastCrawlTime("busboss_all_routes").catch(() => null);
+  const staleHours = 20;
+  const yuecxStale = !lastYuecx || (Date.now() - new Date(lastYuecx).getTime()) > staleHours * 3600000;
+  const busbossStale = !lastBusboss || (Date.now() - new Date(lastBusboss).getTime()) > staleHours * 3600000;
+
+  if (yuecxStale || busbossStale) {
+    console.log(`[startup] 数据过期, 启动全量抓取 (yuecx: ${yuecxStale ? '需要' : '跳过'}, busboss: ${busbossStale ? '需要' : '跳过'})`);
+    runFullCrawl("startup").catch((e) => console.error("[startup] crawl error:", e.message));
+  } else {
+    console.log("[startup] 数据新鲜, 跳过抓取");
+    syncMeta().catch((e) => console.error("[startup] meta sync error:", e.message));
+    syncBusbossMeta("startup").catch((e) => console.error("[startup] busboss meta error:", e.message));
+  }
 
   scheduleDailyCrawl();
 });

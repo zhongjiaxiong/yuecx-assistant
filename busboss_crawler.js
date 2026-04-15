@@ -208,9 +208,79 @@ async function crawlBusbossOnDemand(bbStartCityId, bbEndCityId, date) {
   return intervals;
 }
 
+// ── 全量路线班次抓取 ──────────────────────────────────────────
+
+const CRAWL_DAYS = 15;
+const CONCURRENCY = 10;
+
+function formatDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+async function crawlBusbossAllRoutes(trigger = "auto") {
+  const logId = await db.startCrawlLog("busboss_all_routes", trigger).catch(() => null);
+
+  try {
+    const routes = await db.getRoutesBySource("busboss");
+    const today = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+    console.log(`[busboss-crawl] 开始抓取全部 ${routes.length} 条车盈网路线 × ${CRAWL_DAYS} 天`);
+
+    const tasks = [];
+    for (const route of routes) {
+      for (let i = 0; i < CRAWL_DAYS; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() + i);
+        tasks.push({ route, date: formatDate(d) });
+      }
+    }
+
+    let totalCount = 0;
+    let completed = 0;
+    const total = tasks.length;
+    const startMs = Date.now();
+
+    async function worker(queue) {
+      while (queue.length > 0) {
+        const task = queue.shift();
+        if (!task) break;
+        const startCode = task.route.start_city_id.replace(/^bb_/, "");
+        const endCode = task.route.end_city_id.replace(/^bb_/, "");
+        try {
+          const intervals = await fetchBusbossIntervals(startCode, endCode, task.date);
+          if (intervals.length > 0) {
+            for (const iv of intervals) iv.route_id = task.route.id;
+            await db.upsertIntervals(intervals);
+            totalCount += intervals.length;
+          }
+        } catch (err) {
+          // skip individual failures
+        }
+        completed++;
+        if (completed % 500 === 0 || completed === total) {
+          const elapsedMin = Math.round((Date.now() - startMs) / 60000);
+          console.log(`[busboss-crawl] ${completed}/${total} (${Math.round(completed / total * 100)}%) — ${totalCount} 班次, ${elapsedMin}min`);
+        }
+        await sleep(200);
+      }
+    }
+
+    const workers = Array.from({ length: CONCURRENCY }, () => worker(tasks));
+    await Promise.all(workers);
+
+    const elapsedMin = Math.round((Date.now() - startMs) / 60000);
+    console.log(`[busboss-crawl] 完成: ${routes.length} 路线, ${totalCount} 班次, 耗时 ${elapsedMin}min`);
+    if (logId) await db.finishCrawlLog(logId, totalCount, { routeCount: routes.length }).catch(() => {});
+    return totalCount;
+  } catch (err) {
+    if (logId) await db.failCrawlLog(logId, err.message).catch(() => {});
+    throw err;
+  }
+}
+
 module.exports = {
   syncBusbossMeta,
   crawlBusbossOnDemand,
+  crawlBusbossAllRoutes,
   fetchBusbossIntervals,
   SOURCE,
 };
