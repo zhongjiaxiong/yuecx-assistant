@@ -269,6 +269,19 @@ async function scoreAndRankTool(params, userId, ctx) {
     }
   }
 
+  let boardingRefLocation = null;
+  if (preferBoarding && preferBoarding.length > 0 && gaodeMap.isConfigured()) {
+    const kw = preferBoarding[0];
+    const isDistrictOnly = Object.values(ADCODE_DISTRICT).includes(kw);
+    if (!isDistrictOnly) {
+      try {
+        boardingRefLocation = await gaodeMap.geocode(kw, startCity);
+      } catch (e) {
+        console.warn("[score_and_rank] geocode boarding failed:", e.message);
+      }
+    }
+  }
+
   const allIntervals = searchResult.data.intervals;
   const allStationNames = new Set();
   for (const iv of allIntervals) {
@@ -285,6 +298,7 @@ async function scoreAndRankTool(params, userId, ctx) {
     preferDropoff: preferDropoff || [],
     userLocation,
     destLocation,
+    boardingRefLocation,
     stationCoords,
     weights, topN: topN || 5,
   });

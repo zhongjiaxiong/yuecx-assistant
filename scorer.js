@@ -187,13 +187,15 @@ function scoreAndRank(opts) {
   const {
     intervals, targetTime, timeMode, tripDate,
     preferBoarding = [], preferDropoff = [],
-    userLocation, destLocation, stationCoords,
+    userLocation, destLocation, boardingRefLocation, stationCoords,
     weights: customWeights, topN = 5,
   } = opts;
 
   const hasGPS = !!(userLocation && userLocation.lat && userLocation.lng);
   const hasDest = !!(destLocation && destLocation.lat && destLocation.lng);
-  const defaultW = hasGPS ? (hasDest ? WEIGHTS_GPS_DEST : WEIGHTS_GPS_ONLY) : WEIGHTS_NO_GPS;
+  const hasBoardingRef = !!(boardingRefLocation && boardingRefLocation.lat && boardingRefLocation.lng);
+  const hasBoardingCoord = hasGPS || hasBoardingRef;
+  const defaultW = hasBoardingCoord ? (hasDest ? WEIGHTS_GPS_DEST : WEIGHTS_GPS_ONLY) : WEIGHTS_NO_GPS;
   const w = { ...defaultW, ...customWeights };
   const total = intervals.length;
   let filteredSoldOut = 0;
@@ -217,8 +219,9 @@ function scoreAndRank(opts) {
     const stResult = scoreStation(ivNorm, preferBoarding, preferDropoff);
     const stScore = Math.max(stResult.score, 0);
 
-    const bDist = hasGPS
-      ? scoreStationDistance(stns, userLocation.lat, userLocation.lng, stationCoords)
+    const boardingRef = boardingRefLocation || (hasGPS ? userLocation : null);
+    const bDist = boardingRef
+      ? scoreStationDistance(stns, boardingRef.lat, boardingRef.lng, stationCoords)
       : { score: 0, nearestStation: null, nearestStationTime: null, distanceMeters: null };
     const dDist = (hasGPS && hasDest)
       ? scoreStationDistance(doff, destLocation.lat, destLocation.lng, stationCoords)
