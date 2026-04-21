@@ -371,18 +371,24 @@ function renderGeoSection() {
 
 async function ensureGeoJson() {
   if (_geoLoaded) return true;
-  try {
-    const resp = await fetch("https://geo.datav.aliyun.com/areas_v3/bound/440000_full.json");
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    const geo = await resp.json();
-    echarts.registerMap("guangdong", geo);
-    _geoLoaded = true;
-    return true;
-  } catch (e) {
-    const el = document.getElementById("geoMap");
-    if (el) el.innerHTML = `<div class="error-box" style="margin:40px">地图边界数据加载失败: ${esc(e.message)}</div>`;
-    return false;
+  const sources = [
+    "/geo/440000_full.json",  // 本地自托管，优先
+    "https://geo.datav.aliyun.com/areas_v3/bound/440000_full.json",  // CDN fallback
+  ];
+  let lastErr = null;
+  for (const url of sources) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const geo = await resp.json();
+      echarts.registerMap("guangdong", geo);
+      _geoLoaded = true;
+      return true;
+    } catch (e) { lastErr = e; }
   }
+  const el = document.getElementById("geoMap");
+  if (el) el.innerHTML = `<div class="error-box" style="margin:40px">地图边界数据加载失败: ${esc(lastErr?.message || "unknown")}</div>`;
+  return false;
 }
 
 async function initGeoMap(coverage, anomalies) {
@@ -780,22 +786,57 @@ function renderAnomalies(anomalies) {
     count_drop: "班次骤降",
   };
 
-  const items = anomalies.slice(0, 30).map(a => `
+  // 按 route + type 去重聚合，减少重复噪音
+  const grouped = new Map();
+  for (const a of anomalies) {
+    const key = a.route + "|" + a.type + "|" + (a.source || "");
+    if (!grouped.has(key)) {
+      grouped.set(key, { ...a, count: 0, details: [] });
+    }
+    const g = grouped.get(key);
+    g.count += 1;
+    if (g.details.length < 3 && a.detail) g.details.push(a.detail);
+    if (a.severity === "danger") g.severity = "danger";
+  }
+  const aggregated = [...grouped.values()].sort((a, b) => {
+    if (a.severity !== b.severity) return a.severity === "danger" ? -1 : 1;
+    return b.count - a.count;
+  });
+
+  const DEFAULT_SHOW = 5;
+  const renderItem = a => `
     <div class="anomaly-item ${a.severity}">
       <span class="anomaly-icon">${icons[a.severity] || "⚠️"}</span>
       <div class="anomaly-body">
         <span class="route-name">${esc(a.route)}</span>
         <span style="color:var(--text-secondary);font-size:12px;margin-left:6px">[${typeLabels[a.type] || a.type}]</span>
         <span style="font-size:11px;color:var(--text-secondary);margin-left:4px">${SOURCE_LABELS[a.source] || ""}</span>
-        <div class="detail">${esc(a.detail)}</div>
+        ${a.count > 1 ? `<span style="font-size:11px;color:var(--red);margin-left:4px">×${a.count}</span>` : ""}
+        <div class="detail">${esc(a.details[0] || a.detail || "")}</div>
       </div>
-    </div>
-  `).join("");
+    </div>`;
+
+  const visible = aggregated.slice(0, DEFAULT_SHOW).map(renderItem).join("");
+  const hidden = aggregated.slice(DEFAULT_SHOW).map(renderItem).join("");
+  const moreBtn = aggregated.length > DEFAULT_SHOW
+    ? `<button class="collapsible-toggle" onclick="toggleAnomalies()" id="anomalyToggleBtn" data-rest="${aggregated.length - DEFAULT_SHOW}" style="margin-top:10px">展开剩余 ${aggregated.length - DEFAULT_SHOW} 条</button>`
+    : "";
 
   return `<div class="section">
-    <div class="section-title">数据异常告警 <span class="count">${anomalies.length}</span></div>
-    <div class="anomaly-list">${items}</div>
+    <div class="section-title">数据异常告警 <span class="count">${aggregated.length} 类 · ${anomalies.length} 条</span></div>
+    <div class="anomaly-list">${visible}</div>
+    <div class="anomaly-list" id="anomalyHidden" style="display:none;margin-top:8px">${hidden}</div>
+    ${moreBtn}
   </div>`;
+}
+
+function toggleAnomalies() {
+  const el = document.getElementById("anomalyHidden");
+  const btn = document.getElementById("anomalyToggleBtn");
+  if (!el) return;
+  const isHidden = el.style.display === "none";
+  el.style.display = isHidden ? "" : "none";
+  if (btn) btn.textContent = isHidden ? "收起" : `展开剩余 ${btn.dataset.rest} 条`;
 }
 
 function renderCrawlerHealth(health) {
