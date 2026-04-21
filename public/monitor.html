@@ -351,7 +351,7 @@ function renderGeoSection() {
       <label><input type="checkbox" id="mapShowFlows" checked>显示主要流向（Top 20 OD）</label>
       <label><input type="checkbox" id="mapShowLabels">显示城市标签</label>
       <span style="flex:1"></span>
-      <span style="font-size:11px;color:var(--text-secondary)">点击城市 → 下方矩阵过滤</span>
+      <span style="font-size:11px;color:var(--text-secondary)">点击城市查看详细数据</span>
     </div>
     <div class="map-grid">
       <div id="geoMap"><div class="loading">加载地图中...</div></div>
@@ -544,11 +544,13 @@ function renderGeoCross(agg) {
 }
 
 function filterMatrixByCity(city) {
+  const sec = document.getElementById("matrixSection");
+  if (sec) sec.style.display = "";
   const input = document.getElementById("citySearch");
   if (!input) return;
   input.value = city;
   applyGroupFilters();
-  input.scrollIntoView({ behavior:"smooth", block:"start" });
+  sec?.scrollIntoView({ behavior:"smooth", block:"start" });
 }
 
 const CRAWLER_LABELS = {
@@ -695,12 +697,22 @@ function renderCoverage(cov) {
 
   const visibleCount = sortedGroups.reduce((s, g) => s + g.routes.length, 0);
 
-  return `<div class="section">
-    <div class="section-title">数据覆盖矩阵 <span class="count" id="covCount">${visibleCount} 条路线 · ${sortedGroups.length} 个出发城市 · ${dates.length} 天</span></div>
+  return `<div class="section" id="matrixSection" style="display:none">
+    <div class="section-title" style="justify-content:space-between">
+      <span>数据覆盖矩阵 <span class="count" id="covCount">${visibleCount} 条路线 · ${sortedGroups.length} 个出发城市 · ${dates.length} 天</span></span>
+      <button class="expand-btn" onclick="hideMatrix()" style="margin-left:auto">✕ 关闭</button>
+    </div>
     ${toolbar}
     <div class="matrix-wrap"><table class="matrix" id="matrixTable"><thead><tr><th class="route-col">路线 / 城市</th>${dateHeaders}</tr></thead><tbody>${html}</tbody></table></div>
     ${legend}
   </div>`;
+}
+
+function hideMatrix() {
+  const sec = document.getElementById("matrixSection");
+  if (sec) sec.style.display = "none";
+  const input = document.getElementById("citySearch");
+  if (input) { input.value = ""; applyGroupFilters(); }
 }
 
 function renderRouteRow(r, dates) {
