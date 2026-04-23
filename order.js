@@ -8,6 +8,9 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const db = require("./db");
+const { ADCODE_DISTRICT } = require("./scorer");
+
+const YUECX_APPID = "wx44d254291f27af7c";
 
 // 订单存储文件
 const ORDERS_FILE = path.join(__dirname, "orders.json");
@@ -145,11 +148,17 @@ async function createOrder(orderData) {
     
     // 小程序跳转信息
     miniapp: {
-      name: source === "yuecx" ? "粤出行城际巴士" : "如约城际巴士",
-      appId: source === "yuecx" ? "wx44d254291f27af7c" : "wx1487...",
+      name: source === "yuecx" ? "城际巴士" : "如约城际巴士",
+      appId: source === "yuecx" ? YUECX_APPID : "",
       path: generateMiniappPath(source, {
-        intervalId, date, startCityId: orderData.startCityId,
-        startCityName: startCity, endCityId: orderData.endCityId, endCityName: endCity,
+        intervalId,
+        date,
+        startCityId: orderData.startCityId,
+        startCityName: startCity,
+        endCityId: orderData.endCityId,
+        endCityName: endCity,
+        boarding: orderData.boarding,
+        dropoff: orderData.dropoff,
       }),
     },
   };
@@ -182,22 +191,41 @@ async function createOrder(orderData) {
 }
 
 /**
- * 生成小程序跳转路径
- * 粤出行使用 interval2 班次列表页，参数从逆向的 app-service.js 中提取
+ * 生成粤出行小程序深链
+ * 目标页: /package/bus/pages/interval/interval —— corpid=ycx 的班次列表页
+ * (来自反编译 index43/index21 的 _btn_query 构造)
+ * 当传入 boarding/dropoff 站点对象时，同时注入 Dis(区域) 和 Address(站点) 字段，
+ * 让粤出行页面直接进入"已选好上下车站"的状态。
  */
-function generateMiniappPath(source, { intervalId, date, startCityId, startCityName, endCityId, endCityName } = {}) {
+function generateMiniappPath(source, opts = {}) {
+  const {
+    intervalId,
+    date,
+    startCityId,
+    startCityName,
+    endCityId,
+    endCityName,
+    boarding,
+    dropoff,
+    bookable,  // 如果有这个，直接跳 fillorder（interval.getListByCityIdAndLocationId 返回的单班）
+  } = opts;
+
   if (source === "yuecx") {
+    // 统一回退到 interval2 班次列表页 —— 参数格式来自 project.private.config.json
+    // 里的真实测试链接（snake_case）。直跳 fillorder 依赖粤出行内部 sourceid/openid，不稳。
     const params = new URLSearchParams({
       corpid: "ycx",
-      tripDate: date,
-      beginCityCode: startCityId || "",
-      beginCityName: startCityName || "",
-      endCityCode: endCityId || "",
-      endCityName: endCityName || "",
+      wx_show_residue: "1",
+      tripDate: date || "",
+      begin_city_code: startCityId || "",
+      begin_city_name: startCityName || "",
+      end_city_code: endCityId || "",
+      end_city_name: endCityName || "",
     });
     return `/package/interval2/pages/interval2/interval2?${params.toString()}`;
-  } else if (source === "busboss") {
-    return `pages/booking/index?lineClassDayGID=${intervalId}&classDate=${date}`;
+  }
+  if (source === "busboss") {
+    return `pages/booking/index?lineClassDayGID=${intervalId || ""}&classDate=${date || ""}`;
   }
   return "";
 }
