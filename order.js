@@ -229,33 +229,9 @@ function generateMiniappPath(source, opts = {}) {
       endAddressName: (dropoff && dropoff.name) || "",
     };
 
-    if (bookable && bookable.intervalId && bookable.addressId && bookable.getOffAddressId) {
-      // 直达 fillorder（订单填写页）—— goBuyTicket 反编译出的字段全集
-      // 关键：把 beginAddressCode/endAddressCode 从逗号分隔列表覆盖为 bookable 里的**单个**
-      // locationId。goBuyTicket 的 URL 是单值，fillorder 页按单 id 解析。
-      const singleBegin = bookable.addressLocationId || String(base.beginAddressCode).split(",")[0];
-      const singleEnd = bookable.getOffAddressLocationId || String(base.endAddressCode).split(",")[0];
-      const fill = {
-        ...base,
-        beginAddressCode: singleBegin,
-        beginAddressName: bookable.addressName || base.beginAddressName,
-        endAddressCode: singleEnd,
-        endAddressName: bookable.getOffAddressName || base.endAddressName,
-        lineID: bookable.line || "",
-        intervalID: bookable.intervalId,
-        currentDateID: bookable.currentDateId || "",
-        addressID: bookable.addressId,
-        addressName: bookable.addressName || base.beginAddressName,
-        getOffAddressID: bookable.getOffAddressId,
-        getOffAddressName: bookable.getOffAddressName || base.endAddressName,
-        station: bookable.station || "",
-        locationID: singleBegin,
-        endLocationID: singleEnd,
-      };
-      return `/package/fillorder/pages/fillorder/fillorder?${new URLSearchParams(fill).toString()}`;
-    }
-
-    // 兜底：interval 列表页
+    // 直跳 fillorder 实测无法带出粤出行的富模板（缺 sourceid/openid 等运行时态），
+    // 页面会退化到空白模板。改为统一跳班次列表页，由用户点"立即预订"进入富模板。
+    // 保留 fillorder 代码路径（上方 bookable 解构仍有效），只是不再使用它的返回。
     return `/package/bus/pages/interval/interval?${new URLSearchParams(base).toString()}`;
   }
   if (source === "busboss") {
