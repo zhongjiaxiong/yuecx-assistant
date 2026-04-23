@@ -8,6 +8,9 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const db = require("./db");
+const { ADCODE_DISTRICT } = require("./scorer");
+
+const YUECX_APPID = "wx44d254291f27af7c";
 
 // 订单存储文件
 const ORDERS_FILE = path.join(__dirname, "orders.json");
@@ -145,11 +148,17 @@ async function createOrder(orderData) {
     
     // 小程序跳转信息
     miniapp: {
-      name: source === "yuecx" ? "粤出行城际巴士" : "如约城际巴士",
-      appId: source === "yuecx" ? "wx44d254291f27af7c" : "wx1487...",
+      name: source === "yuecx" ? "城际巴士" : "如约城际巴士",
+      appId: source === "yuecx" ? YUECX_APPID : "",
       path: generateMiniappPath(source, {
-        intervalId, date, startCityId: orderData.startCityId,
-        startCityName: startCity, endCityId: orderData.endCityId, endCityName: endCity,
+        intervalId,
+        date,
+        startCityId: orderData.startCityId,
+        startCityName: startCity,
+        endCityId: orderData.endCityId,
+        endCityName: endCity,
+        boarding: orderData.boarding,
+        dropoff: orderData.dropoff,
       }),
     },
   };
@@ -182,22 +191,75 @@ async function createOrder(orderData) {
 }
 
 /**
- * 生成小程序跳转路径
- * 粤出行使用 interval2 班次列表页，参数从逆向的 app-service.js 中提取
+ * 生成粤出行小程序深链
+ * 目标页: /package/bus/pages/interval/interval —— corpid=ycx 的班次列表页
+ * (来自反编译 index43/index21 的 _btn_query 构造)
+ * 当传入 boarding/dropoff 站点对象时，同时注入 Dis(区域) 和 Address(站点) 字段，
+ * 让粤出行页面直接进入"已选好上下车站"的状态。
  */
-function generateMiniappPath(source, { intervalId, date, startCityId, startCityName, endCityId, endCityName } = {}) {
+function generateMiniappPath(source, opts = {}) {
+  const {
+    intervalId,
+    date,
+    startCityId,
+    startCityName,
+    endCityId,
+    endCityName,
+    boarding,
+    dropoff,
+    bookable,  // 如果有这个，直接跳 fillorder（interval.getListByCityIdAndLocationId 返回的单班）
+  } = opts;
+
   if (source === "yuecx") {
-    const params = new URLSearchParams({
+    // 基础 13 个字段（list 页 + fill 页都要用）
+    const base = {
       corpid: "ycx",
-      tripDate: date,
+      tripDate: date || "",
       beginCityCode: startCityId || "",
       beginCityName: startCityName || "",
+      beginDisCode: (boarding && boarding.adcode) || "",
+      beginDisName: (boarding && ADCODE_DISTRICT[boarding.adcode]) || "",
+      beginAddressCode: (boarding && (boarding.id || boarding.code)) || "",
+      beginAddressName: (boarding && boarding.name) || "",
       endCityCode: endCityId || "",
       endCityName: endCityName || "",
-    });
-    return `/package/interval2/pages/interval2/interval2?${params.toString()}`;
-  } else if (source === "busboss") {
-    return `pages/booking/index?lineClassDayGID=${intervalId}&classDate=${date}`;
+      endDisCode: (dropoff && dropoff.adcode) || "",
+      endDisName: (dropoff && ADCODE_DISTRICT[dropoff.adcode]) || "",
+      endAddressCode: (dropoff && (dropoff.id || dropoff.code)) || "",
+      endAddressName: (dropoff && dropoff.name) || "",
+    };
+
+    if (bookable && bookable.intervalId && bookable.addressId && bookable.getOffAddressId) {
+      // 直达 fillorder（订单填写页）—— goBuyTicket 反编译出的字段全集
+      // 关键：把 beginAddressCode/endAddressCode 从逗号分隔列表覆盖为 bookable 里的**单个**
+      // locationId。goBuyTicket 的 URL 是单值，fillorder 页按单 id 解析。
+      const singleBegin = bookable.addressLocationId || String(base.beginAddressCode).split(",")[0];
+      const singleEnd = bookable.getOffAddressLocationId || String(base.endAddressCode).split(",")[0];
+      const fill = {
+        ...base,
+        beginAddressCode: singleBegin,
+        beginAddressName: bookable.addressName || base.beginAddressName,
+        endAddressCode: singleEnd,
+        endAddressName: bookable.getOffAddressName || base.endAddressName,
+        lineID: bookable.line || "",
+        intervalID: bookable.intervalId,
+        currentDateID: bookable.currentDateId || "",
+        addressID: bookable.addressId,
+        addressName: bookable.addressName || base.beginAddressName,
+        getOffAddressID: bookable.getOffAddressId,
+        getOffAddressName: bookable.getOffAddressName || base.endAddressName,
+        station: bookable.station || "",
+        locationID: singleBegin,
+        endLocationID: singleEnd,
+      };
+      return `/package/fillorder/pages/fillorder/fillorder?${new URLSearchParams(fill).toString()}`;
+    }
+
+    // 兜底：interval 列表页
+    return `/package/bus/pages/interval/interval?${new URLSearchParams(base).toString()}`;
+  }
+  if (source === "busboss") {
+    return `pages/booking/index?lineClassDayGID=${intervalId || ""}&classDate=${date || ""}`;
   }
   return "";
 }
