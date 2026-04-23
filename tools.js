@@ -12,20 +12,30 @@ const { requestGETv1, crawlOnDemand } = require("./crawler");
 const { crawlBusbossOnDemand } = require("./busboss_crawler");
 const { getValidToken } = require("./token_manager");
 const gaodeMap = require("./gaode-map");
+const { generateMiniappPath } = require("./order");
+const { queryRouteLocations, matchRealLocationId, queryBookableIntervals } = require("./crawler");
+
+// Extract station core keyword — remove 括号标注 + 噪音字符, keep distinctive 3-6 chars
+function stripCore(name) {
+  const s = String(name || "").replace(/[（(][^）)]*[）)]/g, "").replace(/[ \s]+/g, "");
+  // prefer first "地铁站/客运站/公交站" prefix segment
+  const m = s.match(/^([^地铁公交客运]*?(?:地铁|客运|公交|机场)[^（(\s]*)/);
+  return (m ? m[1] : s).slice(0, 8);
+}
 
 const CACHE_MAX_MINUTES = parseInt(process.env.CACHE_MAX_MINUTES || "5", 10);
 
 const SOURCE_LABELS = {
-  yuecx: "粤出行",
+  yuecx: "城际巴士",
   busboss: "如约城际",
 };
 
 const MINIAPP_NAMES = {
-  yuecx: "粤出行城际巴士",
+  yuecx: "城际巴士",
   busboss: "如约城际巴士",
 };
 
-const MINIAPP_NAME = "粤出行城际巴士";
+const MINIAPP_NAME = "城际巴士";
 
 // ── 城市名 -> cityId 解析 ───────────────────────────────────
 
@@ -176,7 +186,12 @@ async function searchIntervals({ date, startCity, endCity }) {
 }
 
 async function fetchYlxIntervals(startCityId, endCityId, date) {
-  let routeId = await db.getRouteId(startCityId, endCityId, "yuecx");
+  let routeId;
+  try {
+    routeId = await db.getRouteId(startCityId, endCityId, "yuecx");
+  } catch (err) {
+    console.warn("[search] ylx getRouteId failed, crawling directly:", err.message);
+  }
 
   if (!routeId) {
     try {
@@ -189,7 +204,13 @@ async function fetchYlxIntervals(startCityId, endCityId, date) {
     return intervals.map((r) => ({ ...r, source: "yuecx" }));
   }
 
-  let cacheAge = await db.getCacheAge(routeId, date);
+  let cacheAge;
+  try {
+    cacheAge = await db.getCacheAge(routeId, date);
+  } catch (_) {
+    cacheAge = null;
+  }
+
   if (cacheAge === null || cacheAge > CACHE_MAX_MINUTES) {
     try {
       await crawlOnDemand(startCityId, endCityId, date);
@@ -199,8 +220,13 @@ async function fetchYlxIntervals(startCityId, endCityId, date) {
     }
   }
 
-  const rows = await db.queryIntervals(routeId, date);
-  return rows.map((r) => ({ ...r, source: "yuecx" }));
+  try {
+    const rows = await db.queryIntervals(routeId, date);
+    return rows.map((r) => ({ ...r, source: "yuecx" }));
+  } catch (err) {
+    console.warn("[search] ylx queryIntervals failed:", err.message);
+    return [];
+  }
 }
 
 async function fetchBusbossIntervalsSafe(bbStartCityId, bbEndCityId, date) {
@@ -404,55 +430,224 @@ async function refreshCache({ startCity, endCity, days }) {
 
 // ── Tool 7: book_interval ───────────────────────────────────
 
-async function bookInterval({ date, startCity, endCity, intervalId, boardingStationName, dropoffStationName }) {
+async function bookInterval({ date, startCity, endCity, intervalId, rank, boardingStationName, dropoffStationName }, _userId, ctx) {
+  // Rank fallback: if caller gave a small integer (like LLM passing "1" from "订第1班"),
+  // resolve it against the most recent score_and_rank in this session.
+  const ranked = ctx?.session?.lastRanked;
+  const looksLikeRank = intervalId != null && /^\d{1,2}$/.test(String(intervalId));
+  const rankNum = Number.isInteger(rank) ? rank : (looksLikeRank ? Number(intervalId) : null);
+  // Cache hit from session's last score_and_rank — the scorer already has full interval data.
+  // Skip DB lookup entirely when this is available; it saves a round-trip AND avoids the race
+  // where scorer's crawlOnDemand result hasn't been flushed to DB yet.
+  let iv = null;
+  let matchedSource = "yuecx";
+  let rankedHit = null;
+
+  if (rankNum && ranked?.results?.length) {
+    const hit = ranked.results.find((r) => r.rank === rankNum) || ranked.results[rankNum - 1];
+    if (hit?.interval) {
+      rankedHit = hit;
+      intervalId = hit.interval.id || hit.interval.interval_id || intervalId;
+      if (!date) date = ranked.date;
+      if (!startCity) startCity = ranked.startCity;
+      if (!endCity) endCity = ranked.endCity;
+      if (!boardingStationName && hit.matchedBoarding) boardingStationName = hit.matchedBoarding;
+      if (!dropoffStationName && hit.matchedDropoff) dropoffStationName = hit.matchedDropoff;
+      // Directly use the scorer's interval — no DB query needed
+      iv = {
+        interval_id: intervalId,
+        interval_name: hit.interval.interval_name || hit.interval.intervalName || "",
+        from_time: hit.interval.from_time || hit.interval.fromTime || "",
+        price_fen: hit.interval.price_fen != null ? hit.interval.price_fen
+                 : (hit.interval.priceFen != null ? hit.interval.priceFen
+                 : (hit.interval.priceYuan ? Math.round(parseFloat(hit.interval.priceYuan) * 100) : 0)),
+        residue: hit.interval.residue,
+        boarding_stations: hit.interval.boarding_stations || hit.interval.boardingStations || [],
+        dropoff_stations: hit.interval.dropoff_stations || hit.interval.dropoffStations || [],
+      };
+      matchedSource = hit.interval.source || "yuecx";
+    }
+  }
+
   const start = await resolveCityId(startCity);
   const end = await resolveCityId(endCity);
   if (!start || !end) return { success: false, error: "城市未找到" };
 
-  // Search across all sources to find the interval
-  const allCityRows = await db.findCityByName(startCity);
-  const allEndRows = await db.findCityByName(endCity);
-  let iv = null;
-  let matchedSource = "yuecx";
+  // Fallback to DB lookup if session cache didn't hit (e.g. user specified intervalId directly)
+  if (!iv) {
+    const allCityRows = await db.findCityByName(startCity);
+    const allEndRows = await db.findCityByName(endCity);
+    for (const src of ["yuecx", "busboss"]) {
+      const sCity = allCityRows.find((r) => r.source === src);
+      const eCity = allEndRows.find((r) => r.source === src);
+      if (!sCity || !eCity) continue;
+      const routeId = await db.getRouteId(sCity.city_id, eCity.city_id, src);
+      if (!routeId) continue;
+      const intervals = await db.queryIntervals(routeId, date);
+      const found = intervals.find((r) => String(r.interval_id) === String(intervalId));
+      if (found) { iv = found; matchedSource = src; break; }
+    }
+    if (!iv) return { success: false, error: `未找到班次 ${intervalId}` };
+  }
 
-  for (const src of ["yuecx", "busboss"]) {
-    const sCity = allCityRows.find((r) => r.source === src);
-    const eCity = allEndRows.find((r) => r.source === src);
-    if (!sCity || !eCity) continue;
-    const routeId = await db.getRouteId(sCity.city_id, eCity.city_id, src);
-    if (!routeId) continue;
-    const intervals = await db.queryIntervals(routeId, date);
-    const found = intervals.find((r) => String(r.interval_id) === String(intervalId));
-    if (found) {
-      iv = found;
-      matchedSource = src;
-      break;
+  // 全/半角括号差异、空白差异会让 includes() 失败，做一次规范化
+  const norm = (s) => String(s || "").replace(/[（）()\s]/g, "");
+  const boarding = (iv.boarding_stations || []).find((s) => {
+    if (!boardingStationName) return true;
+    const a = norm(s.name), b = norm(boardingStationName);
+    return a === b || a.includes(b) || b.includes(a);
+  }) || (iv.boarding_stations || [])[0];
+
+  const dropoff = (iv.dropoff_stations || []).find((s) => {
+    if (!dropoffStationName) return true;
+    const a = norm(s.name), b = norm(dropoffStationName);
+    return a === b || a.includes(b) || b.includes(a);
+  }) || (iv.dropoff_stations || [])[0];
+
+  // 粤出行 interval.getListByCityIdAndLocationId **支持逗号分隔的 locationIds**（实测过）。
+  // 每个"站点名"实际在粤出行的 locationId 空间里可能对应数十个子线路 variant，name-matching
+  // 单个 id 基本必然错。策略：传**所有候选**—— boarding 侧包含所有覆盖 matchedBoarding 区域的站点，
+  // dropoff 侧同理。这样粤出行后端会返回该路线的全部班次，用户在列表里自己点。
+  let resolvedBoarding = boarding;
+  let resolvedDropoff = dropoff;
+  let resolvedStartCityId = null, resolvedEndCityId = null;
+  if (matchedSource === "yuecx") {
+    try {
+      // 粤出行有些城市 id 在 intervalList API 和 area.query_by_start_end API 不通用，
+      // 比如江门 intervalList 吃 440700 但 area.query 只认 44070001（全区）。
+      // 尝试 DB 里该城市所有 yuecx variant，直到 area.query 返回非空。
+      const tryStartIds = [start.city_id, ...(await db.findCityByName(startCity) || []).filter((r) => r.source === "yuecx" && r.city_id !== start.city_id).map((r) => r.city_id)];
+      const tryEndIds = [end.city_id, ...(await db.findCityByName(endCity) || []).filter((r) => r.source === "yuecx" && r.city_id !== end.city_id).map((r) => r.city_id)];
+      let locs = { boarding: [], dropoff: [] };
+      let usedStartId = start.city_id, usedEndId = end.city_id;
+      outer: for (const s of tryStartIds) {
+        for (const e of tryEndIds) {
+          const got = await queryRouteLocations(s, e);
+          if (got.boarding.length || got.dropoff.length) {
+            locs = got;
+            usedStartId = s;
+            usedEndId = e;
+            resolvedStartCityId = s;
+            resolvedEndCityId = e;
+            if (s !== start.city_id || e !== end.city_id) {
+              console.log(`[book_interval] area.query cityId variant: ${start.city_id}→${end.city_id} empty, used ${s}→${e} instead`);
+            }
+            break outer;
+          }
+        }
+      }
+      // 用 GPS adcode → 区名 过滤同区候选，减少不相关干扰
+      const boardDisName = boarding && ADCODE_DISTRICT[boarding.adcode];
+      const dropDisName = dropoff && ADCODE_DISTRICT[dropoff.adcode];
+
+      // 计算 2 层候选集合：
+      //   - strict: 严格名字匹配，用于 interval.getListByCityIdAndLocationId（要真同子线路）
+      //   - broad:  匹配不到就全量，用于 URL 兜底（用户到 interval 列表页自选）
+      let bStrict = [];
+      if (boarding && boarding.name) {
+        const kw = stripCore(boarding.name);
+        bStrict = locs.boarding.filter((l) => kw && stripCore(l.name).includes(kw));
+      }
+      const bBroad = bStrict.length < 5 ? locs.boarding : bStrict;
+      const bStrictIds = bStrict.slice(0, 40).map((l) => l.id).join(",");
+      const bBroadIds = bBroad.slice(0, 40).map((l) => l.id).join(",");
+
+      let dStrict = [];
+      if (dropoff && dropoff.name) {
+        const kw = stripCore(dropoff.name);
+        dStrict = locs.dropoff.filter((l) => kw && stripCore(l.name).includes(kw));
+      }
+      const dBroad = dStrict.length < 5 ? locs.dropoff : dStrict;
+      const dStrictIds = dStrict.slice(0, 40).map((l) => l.id).join(",");
+      const dBroadIds = dBroad.slice(0, 40).map((l) => l.id).join(",");
+
+      if (bBroadIds) {
+        resolvedBoarding = {
+          ...boarding,
+          id: bBroadIds,
+          code: bBroadIds,
+          // 严格集（严格匹配到的候选，供 queryBookableIntervals 用）
+          strictIds: bStrictIds,
+          // 显示名用区名（用户原话："上下车点其实只是提示"），避免 URL 塞一堆站名
+          name: boardDisName ? `${boardDisName}` : (boarding?.name || ""),
+        };
+      }
+      if (dBroadIds) {
+        resolvedDropoff = {
+          ...dropoff,
+          id: dBroadIds,
+          code: dBroadIds,
+          strictIds: dStrictIds,
+          name: dropDisName ? `${dropDisName}` : (dropoff?.name || ""),
+        };
+      }
+    } catch (e) {
+      console.warn("[book_interval] queryRouteLocations failed:", e.message);
     }
   }
 
-  if (!iv) return { success: false, error: `未找到班次 ${intervalId}` };
-
-  const boarding = (iv.boarding_stations || []).find(
-    (s) => !boardingStationName || s.name.includes(boardingStationName)
-  ) || (iv.boarding_stations || [])[0];
-
-  const dropoff = (iv.dropoff_stations || []).find(
-    (s) => !dropoffStationName || s.name.includes(dropoffStationName)
-  ) || (iv.dropoff_stations || [])[0];
-
   const miniappName = MINIAPP_NAMES[matchedSource] || MINIAPP_NAME;
 
-  const miniappPathParams = new URLSearchParams({
-    corpid: "ycx",
-    tripDate: date,
-    beginCityCode: start.city_id,
-    beginCityName: start.city_name,
-    endCityCode: end.city_id,
+  // === 直通 fillorder：查一次粤出行真实班次 API，挑一班，把 addressId/currentDateId 等拿到 ===
+  // 这些字段只能从 interval.getListByCityIdAndLocationId 拿到，DB 和 intervalListV2 都没。
+  // 失败则回退到 interval 列表页（用户自己选）。
+  let bookable = null;
+  if (matchedSource === "yuecx" && resolvedBoarding?.strictIds && resolvedDropoff?.strictIds) {
+    try {
+      const qbArgs = {
+        startCityId: resolvedStartCityId || start.city_id,
+        endCityId: resolvedEndCityId || end.city_id,
+        takeDate: date,
+        startLocationIds: resolvedBoarding.strictIds,
+        endLocationIds: resolvedDropoff.strictIds,
+      };
+      console.log(`[book_interval] queryBookable city=${qbArgs.startCityId}→${qbArgs.endCityId} date=${qbArgs.takeDate} startLocs=${qbArgs.startLocationIds.split(",").length}ids endLocs=${qbArgs.endLocationIds.split(",").length}ids`);
+      const bookables = await queryBookableIntervals(qbArgs);
+      if (bookables.length > 0) {
+        // 挑选策略：优先匹配 fromTime（scorer 算出来的 matchedBoardingTime 或 iv.from_time），
+        // 否则取第一个；避免选到余票 0 的
+        const desiredTime = iv.from_time || "";
+        let pick = bookables.find((b) => b.fromTime === desiredTime && b.residue > 0);
+        if (!pick) pick = bookables.find((b) => b.residue > 0) || bookables[0];
+        if (pick) {
+          bookable = {
+            intervalId: pick.intervalId,
+            line: pick.line,
+            currentDateId: pick.currentDateId,
+            addressId: pick.addressId,
+            addressName: pick.addressName,
+            getOffAddressId: pick.getOffAddressId,
+            getOffAddressName: pick.getOffAddressName,
+            station: pick.station,
+            fromTime: pick.fromTime,
+            residue: pick.residue,
+            priceFen: pick.ticketPriceFen,
+            // 单值 locationId —— URL 的 beginAddressCode/endAddressCode 要用这个覆盖 comma 列表，
+            // 否则粤出行 fillorder 按 locationID 逐字解析可能识别错
+            addressLocationId: pick.addressLocationId,
+            getOffAddressLocationId: pick.getOffAddressLocationId,
+          };
+          console.log(`[book_interval] 直达 fillorder: intervalId=${pick.intervalId} ${pick.fromTime} ${pick.addressName}→${pick.getOffAddressName} 余${pick.residue}`);
+        }
+      } else {
+        console.log(`[book_interval] queryBookableIntervals 无结果，回退到 interval 列表页`);
+      }
+    } catch (e) {
+      console.warn("[book_interval] queryBookableIntervals failed:", e.message);
+    }
+  }
+
+  const miniappPath = generateMiniappPath(matchedSource, {
+    intervalId: iv.interval_id,
+    date,
+    startCityId: resolvedStartCityId || start.city_id,
+    startCityName: start.city_name,
+    endCityId: resolvedEndCityId || end.city_id,
     endCityName: end.city_name,
+    boarding: resolvedBoarding,
+    dropoff: resolvedDropoff,
+    bookable,
   });
-  const miniappPath = matchedSource === "yuecx"
-    ? `/package/interval2/pages/interval2/interval2?${miniappPathParams.toString()}`
-    : "";
 
   return {
     success: true,
@@ -583,11 +778,11 @@ const TOOL_SCHEMAS = [
   { type: "function", function: { name: "score_and_rank", description: "对指定日期路线的班次综合评分排序。有GPS时自动按上车距离排序；如用户说了目的地关键词(如'天河体育中心')，传入preferDropoff会自动geocode并按下车距离排序。六维度: 时间/价格/上车距离/下车距离/站点关键词/余票。", parameters: { type: "object", properties: { date: { type: "string", description: "出行日期 YYYY-MM-DD" }, startCity: { type: "string", description: "出发城市名" }, endCity: { type: "string", description: "到达城市名" }, targetTime: { type: "string", description: "期望时间 HH:MM" }, timeMode: { type: "string", enum: ["depart", "arrive", "asap"], description: "时间模式" }, preferBoarding: { type: "array", items: { type: "string" }, description: "偏好上车站关键词" }, preferDropoff: { type: "array", items: { type: "string" }, description: "偏好下车站关键词或目的地地标(如'天河体育中心')，系统会自动geocode计算距离" }, topN: { type: "number", description: "返回前 N 个，默认 5" } }, required: ["date", "startCity", "endCity", "targetTime", "timeMode"] } } },
   { type: "function", function: { name: "verify_realtime", description: "实时查询指定班次最新余票和状态。", parameters: { type: "object", properties: { date: { type: "string", description: "日期" }, startCity: { type: "string", description: "出发城市" }, endCity: { type: "string", description: "到达城市" }, intervalId: { type: "string", description: "班次 ID" } }, required: ["date", "startCity", "endCity", "intervalId"] } } },
   { type: "function", function: { name: "refresh_cache", description: "强制刷新指定路线的数据。", parameters: { type: "object", properties: { startCity: { type: "string", description: "出发城市" }, endCity: { type: "string", description: "到达城市" }, days: { type: "number", description: "天数，默认 3" } }, required: ["startCity", "endCity"] } } },
-  { type: "function", function: { name: "book_interval", description: "为用户生成指定班次的订票跳转链接。用户可点击链接直接跳转到小程序填单页完成购票。", parameters: { type: "object", properties: { date: { type: "string", description: "出行日期 YYYY-MM-DD" }, startCity: { type: "string", description: "出发城市名" }, endCity: { type: "string", description: "到达城市名" }, intervalId: { type: "string", description: "班次 ID" }, boardingStationName: { type: "string", description: "偏好的上车站名称（可选，模糊匹配）" }, dropoffStationName: { type: "string", description: "偏好的下车站名称（可选，模糊匹配）" } }, required: ["date", "startCity", "endCity", "intervalId"] } } },
+  { type: "function", function: { name: "book_interval", description: "为用户生成指定班次的订票跳转链接。用户可点击链接直接跳转到小程序填单页完成购票。用户说「订第X班」时，直接用 rank=X 即可，系统会自动从上一次 score_and_rank 的结果里取真实班次。", parameters: { type: "object", properties: { rank: { type: "integer", description: "对应上一次排序结果的第 N 班（1 开始）。优先用这个。" }, date: { type: "string", description: "出行日期 YYYY-MM-DD，留空则继承上一次排序的日期" }, startCity: { type: "string", description: "出发城市名，留空则继承上一次排序" }, endCity: { type: "string", description: "到达城市名，留空则继承上一次排序" }, intervalId: { type: "string", description: "真实班次 ID（如 68074265）；只有当你确实从 score_and_rank 结果里读到了 interval.id 才传；用户说「第X班」请改用 rank 参数" }, boardingStationName: { type: "string", description: "偏好的上车站名称（可选，模糊匹配）" }, dropoffStationName: { type: "string", description: "偏好的下车站名称（可选，模糊匹配）" } }, required: [] } } },
   { type: "function", function: { name: "suggest_boarding", description: "根据用户 GPS 定位自动推荐最近的上车站点。需要用户已授权浏览器定位。返回按距离排序的候选上车站列表，包含距离、覆盖班次数、时间范围。", parameters: { type: "object", properties: { startCity: { type: "string", description: "出发城市名" }, endCity: { type: "string", description: "到达城市名" }, date: { type: "string", description: "出行日期 YYYY-MM-DD" } }, required: ["startCity", "endCity", "date"] } } },
 ];
 
-const CONTEXT_TOOLS = new Set(["get_user_location", "suggest_boarding", "score_and_rank"]);
+const CONTEXT_TOOLS = new Set(["get_user_location", "suggest_boarding", "score_and_rank", "book_interval"]);
 
 async function executeTool(name, args, userId, ctx) {
   const handler = TOOL_HANDLERS[name];
