@@ -12,9 +12,13 @@ const path = require("path");
 const CONFIG_PATH = process.env.BUSBOSS_CONFIG_PATH || path.join(__dirname, "busboss_config.json");
 const REFRESH_MARGIN_MS = 60 * 60 * 1000; // 过期前 1 小时续期
 const REFRESH_CHECK_INTERVAL_MS = 10 * 60 * 1000; // 每 10 分钟检查一次
+const REFRESH_COOLDOWN_MS = 30 * 60 * 1000; // 续期失败后冷却 30 分钟
 
 let cachedConfig = null;
 let refreshTimer = null;
+let inflightRefresh = null; // 并发去重
+let nextRefreshAllowedAt = 0; // 冷却截止时间
+let unavailableLogged = false; // 「不可用」日志只打一次
 
 function loadConfig() {
   try {
@@ -86,43 +90,71 @@ async function refreshTokenFromServer(config) {
 
   const data = await resp.json();
 
-  if (data.Code === 200 && data.Data) {
-    const newToken = data.Data;
+  // 实际响应格式：{ success: true, msg: "", Authorization: "<newJwt>" }
+  // 兼容旧格式：{ Code: 200, Data: "<newJwt>" }
+  const newToken = data?.Authorization || data?.Data || "";
+  const ok = data?.success === true || data?.Code === 200;
+
+  if (ok && newToken) {
     console.log("[token_manager] token 续期成功");
     return newToken;
   }
 
-  throw new Error(`续期失败: Code=${data.Code}, Msg=${data.Msg || JSON.stringify(data)}`);
+  // success:true 但 Authorization 为空 = 服务端拒绝续期（一般是 refreshToken 已彻底过期）
+  const unrecoverable = ok && !newToken;
+  const err = new Error(`续期失败: ${JSON.stringify(data)}`);
+  err.unrecoverable = unrecoverable;
+  throw err;
 }
 
 async function tryRefresh() {
-  const config = loadConfig();
-  if (!config || !config.token) {
-    console.warn("[token_manager] 无 token 可续期");
-    return false;
-  }
+  if (inflightRefresh) return inflightRefresh;
+  if (Date.now() < nextRefreshAllowedAt) return false;
 
-  if (!isTokenExpiringSoon(config.token)) {
-    const expiry = getTokenExpiry(config.token);
-    const remainMin = Math.round((expiry - Date.now()) / 60000);
-    console.log(`[token_manager] token 尚未过期，剩余 ${remainMin} 分钟`);
-    return true;
-  }
+  inflightRefresh = (async () => {
+    const config = loadConfig();
+    if (!config || !config.token) {
+      console.warn("[token_manager] 无 token 可续期");
+      return false;
+    }
 
-  try {
-    const newToken = await refreshTokenFromServer(config);
-    config.token = newToken;
-    config.headers_template.Authorization = newToken;
-    saveConfig(config);
+    if (!isTokenExpiringSoon(config.token)) {
+      const expiry = getTokenExpiry(config.token);
+      const remainMin = Math.round((expiry - Date.now()) / 60000);
+      console.log(`[token_manager] token 尚未过期，剩余 ${remainMin} 分钟`);
+      return true;
+    }
 
-    const newExpiry = getTokenExpiry(newToken);
-    const remainMin = newExpiry ? Math.round((newExpiry - Date.now()) / 60000) : "?";
-    console.log(`[token_manager] 新 token 有效期还剩 ${remainMin} 分钟`);
-    return true;
-  } catch (err) {
-    console.error("[token_manager] token 续期失败:", err.message);
-    return false;
-  }
+    try {
+      const newToken = await refreshTokenFromServer(config);
+      config.token = newToken;
+      if (config.headers_template) config.headers_template.Authorization = newToken;
+      saveConfig(config);
+      unavailableLogged = false;
+
+      const newExpiry = getTokenExpiry(newToken);
+      const remainMin = newExpiry ? Math.round((newExpiry - Date.now()) / 60000) : "?";
+      console.log(`[token_manager] 新 token 有效期还剩 ${remainMin} 分钟`);
+      return true;
+    } catch (err) {
+      nextRefreshAllowedAt = Date.now() + REFRESH_COOLDOWN_MS;
+      if (err.unrecoverable) {
+        if (!unavailableLogged) {
+          console.error(
+            "[token_manager] token 已彻底过期，服务端拒绝续期。请通过微信小程序重新登录以获取新 refreshToken，然后更新 busboss_config.json。"
+          );
+          unavailableLogged = true;
+        }
+      } else {
+        console.error("[token_manager] token 续期失败:", err.message, `（${REFRESH_COOLDOWN_MS / 60000} 分钟内不再重试）`);
+      }
+      return false;
+    }
+  })().finally(() => {
+    inflightRefresh = null;
+  });
+
+  return inflightRefresh;
 }
 
 /**
@@ -135,15 +167,20 @@ async function getValidToken() {
   if (!config || !config.token) return null;
 
   if (isTokenExpired(config.token)) {
-    const ok = await tryRefresh();
-    if (!ok) {
-      console.warn("[token_manager] token 已过期且续期失败，busboss 数据源将不可用");
+    // 冷却期内不再发起续期，直接判定为不可用
+    if (Date.now() < nextRefreshAllowedAt && !inflightRefresh) {
+      if (!unavailableLogged) {
+        console.warn("[token_manager] busboss token 不可用（处于续期冷却期）");
+        unavailableLogged = true;
+      }
       return null;
     }
+    const ok = await tryRefresh();
+    if (!ok) return null;
     return cachedConfig.token;
   }
 
-  if (isTokenExpiringSoon(config.token)) {
+  if (isTokenExpiringSoon(config.token) && Date.now() >= nextRefreshAllowedAt) {
     tryRefresh().catch((e) => console.error("[token_manager] 后台续期失败:", e.message));
   }
 
