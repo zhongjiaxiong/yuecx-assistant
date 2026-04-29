@@ -1,14 +1,14 @@
 const api = require('../../utils/api');
 const auth = require('../../utils/auth');
 
-const LOADING_TEXTS = {
-  thinking: '正在思考...',
-  locating: '正在定位...',
-  searching: '正在查询班次...',
-  booking: '正在生成订票信息...',
-};
-
 let msgIdCounter = 0;
+
+function genSessionId() {
+  return 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+const STEP_MAP = { thinking: 0, locating: 1, searching: 2, ranking: 2, processing: 2, booking: 2, done: 3 };
+const STEP_TEXT = ['正在思考...', '正在定位...', '正在查询班次...', ''];
 
 Page({
   data: {
@@ -16,14 +16,58 @@ Page({
     inputValue: '',
     loading: false,
     loadingText: '正在思考...',
+    loadingStep: 0,
     locationGranted: false,
     scrollTarget: '',
+    inputMode: 'text',
+    recording: false,
+    lastRouteContext: null,
+    hasPhone: false,
   },
 
   _location: null,
+  _sessionId: '',
+  _recorder: null,
+  _recordFile: '',
 
   onLoad() {
+    this._sessionId = genSessionId();
     this._checkLocationAuth();
+    this._initRecorder();
+    this._refreshPhoneStatus();
+  },
+
+  onShow() {
+    this._refreshPhoneStatus();
+  },
+
+  _refreshPhoneStatus() {
+    this.setData({ hasPhone: auth.hasPhone() });
+  },
+
+  async onGetPhoneNumber(e) {
+    if (e.detail.errMsg !== 'getPhoneNumber:ok') return;
+    const code = e.detail.code;
+    if (!code) {
+      wx.showToast({ title: '授权失败', icon: 'none' });
+      return;
+    }
+    wx.showLoading({ title: '登录中...', mask: true });
+    try {
+      if (!auth.isLoggedIn()) await auth.silentLogin();
+      const data = await auth.bindPhone(code);
+      if (!data || !data.phone) {
+        throw new Error((data && data.error) || '未返回手机号');
+      }
+      this._refreshPhoneStatus();
+      wx.showToast({ title: '登录成功', icon: 'success' });
+    } catch (err) {
+      console.error('[chat] bindPhone error:', err);
+      const msg = (err && (err.message || err.errMsg)) || '请重试';
+      wx.showModal({ title: '登录失败', content: String(msg).slice(0, 200), showCancel: false });
+    } finally {
+      wx.hideLoading();
+    }
   },
 
   // ── 定位 ──────────────────────────────────────────
@@ -79,9 +123,8 @@ Page({
     if (!text || this.data.loading) return;
 
     this._addMessage('user', text);
-    this.setData({ inputValue: '', loading: true, loadingText: LOADING_TEXTS.thinking });
+    this.setData({ inputValue: '' });
     this._scrollToBottom();
-
     this._callChat(text);
   },
 
@@ -90,37 +133,181 @@ Page({
     if (!text || this.data.loading) return;
 
     this._addMessage('user', text);
-    this.setData({ loading: true, loadingText: LOADING_TEXTS.booking });
     this._scrollToBottom();
-
     this._callChat(text);
   },
 
-  // ── API 调用 ──────────────────────────────────────
+  // ── 录音 ────────────────────────────────────────
+
+  _initRecorder() {
+    const mgr = wx.getRecorderManager();
+    mgr.onStop((res) => {
+      this._recordFile = res.tempFilePath;
+      if (this.data.recording) this.setData({ recording: false });
+      if (res.duration < 800) {
+        wx.showToast({ title: '说话时间太短', icon: 'none' });
+        return;
+      }
+      this._uploadVoice(res.tempFilePath);
+    });
+    mgr.onError((err) => {
+      console.error('[recorder] error:', err);
+      this.setData({ recording: false });
+      wx.showToast({ title: '录音失败', icon: 'none' });
+    });
+    this._recorder = mgr;
+  },
+
+  toggleInputMode() {
+    this.setData({ inputMode: this.data.inputMode === 'text' ? 'voice' : 'text' });
+  },
+
+  onTouchStartRecord() {
+    this.setData({ recording: true });
+    this._recorder.start({ format: 'mp3', duration: 60000, sampleRate: 16000, numberOfChannels: 1 });
+  },
+
+  onTouchEndRecord() {
+    this._recorder.stop();
+  },
+
+  onTouchCancelRecord() {
+    this._recorder.stop();
+    this.setData({ recording: false });
+  },
+
+  async _uploadVoice(filePath) {
+    this.setData({ loading: true, loadingStep: -1, loadingText: '语音识别中...' });
+    try {
+      const token = wx.getStorageSync('token') || '';
+      const baseUrl = (getApp() && getApp().globalData.baseUrl) || 'http://localhost:3000';
+      const res = await new Promise((resolve, reject) => {
+        wx.uploadFile({
+          url: `${baseUrl}/api/stt`,
+          filePath,
+          name: 'audio',
+          formData: { format: 'mp3' },
+          header: token ? { Authorization: `Bearer ${token}` } : {},
+          success: (r) => resolve(r),
+          fail: reject,
+        });
+      });
+      const data = JSON.parse(res.data);
+      if (data.text) {
+        this._addMessage('user', data.text);
+        this._scrollToBottom();
+        await this._callChat(data.text);
+      } else {
+        this.setData({ loading: false });
+        wx.showToast({ title: '未识别到语音', icon: 'none' });
+      }
+    } catch (err) {
+      console.error('[stt] error:', err);
+      this.setData({ loading: false });
+      wx.showToast({ title: '语音识别失败', icon: 'none' });
+    }
+  },
+
+  // ── API 调用 (SSE 流式) ───────────────────────────
 
   async _callChat(message) {
     try {
       if (!auth.isLoggedIn()) {
-        await auth.silentLogin();
+        try { await auth.silentLogin(); } catch (e) { console.warn('[chat] login skipped:', e.message); }
       }
 
-      const data = { message };
-      if (this._location) {
-        data.location = this._location;
-      }
+      const data = { message, sessionId: this._sessionId };
+      if (this._location) data.location = this._location;
 
-      const result = await api.post('/api/chat', data, { timeout: 90000 });
-      const reply = result.reply || result.error || '抱歉，没有收到回复';
+      this.setData({ loading: true, loadingStep: 0, loadingText: '正在思考...' });
+      let cardReceived = false;
 
-      const segments = this._parseReply(reply);
-      this._addAssistantMessage(segments);
+      await api.streamPost('/api/chat', data, (evt) => {
+        switch (evt.type) {
+          case 'progress': {
+            const idx = STEP_MAP[evt.step];
+            if (idx != null && this.data.loading) {
+              this.setData({ loadingStep: idx, loadingText: STEP_TEXT[idx] || '' });
+            }
+            break;
+          }
+          case 'card':
+            cardReceived = true;
+            this.setData({ loading: false });
+            this._addAssistantMessage([{ type: 'route', data: evt.data }]);
+            this._extractRouteContext([{ type: 'route', data: evt.data }]);
+            this._scrollToBottom();
+            break;
+          case 'supplement':
+            if (evt.text) {
+              this._addAssistantMessage([{ type: 'text', content: this._sanitize(evt.text) }]);
+              this._scrollToBottom();
+            }
+            break;
+          case 'done':
+            if (!cardReceived && evt.reply) {
+              const segments = this._parseReply(evt.reply);
+              this._addAssistantMessage(segments);
+              this._extractRouteContext(segments);
+              this._scrollToBottom();
+            }
+            break;
+          case 'error':
+            this._addAssistantMessage([{ type: 'text', content: evt.error || '服务异常，请稍后重试' }]);
+            this._scrollToBottom();
+            break;
+        }
+      }, { timeout: 95000 });
     } catch (err) {
       console.error('[chat] error:', err);
-      this._addAssistantMessage([{ type: 'text', content: '网络异常，请稍后重试' }]);
+      if (!cardReceived) {
+        this._addAssistantMessage([{ type: 'text', content: '网络异常，请稍后重试' }]);
+      }
     } finally {
       this.setData({ loading: false });
       this._scrollToBottom();
     }
+  },
+
+  _extractRouteContext(segments) {
+    for (const seg of segments) {
+      if (seg.type === 'route' && seg.data) {
+        this.setData({
+          lastRouteContext: {
+            startCity: seg.data.startCity,
+            endCity: seg.data.endCity,
+            date: seg.data.date,
+          },
+        });
+        break;
+      }
+    }
+  },
+
+  // ── 地图选站 ──────────────────────────────────────
+
+  onOpenMap() {
+    const ctx = this.data.lastRouteContext;
+    if (!ctx || !ctx.startCity) {
+      wx.showToast({ title: '请先查询班次', icon: 'none' });
+      return;
+    }
+    if (!this._location) {
+      wx.showToast({ title: '请先开启定位', icon: 'none' });
+      return;
+    }
+    wx.navigateTo({
+      url: `/pages/nearby-map/nearby-map?lat=${this._location.latitude}&lng=${this._location.longitude}&startCity=${ctx.startCity}&endCity=${ctx.endCity}&date=${ctx.date}`,
+    });
+  },
+
+  onSelectStation(e) {
+    const name = e.detail.name;
+    if (!name) return;
+    const text = `我选择从${name}上车`;
+    this._addMessage('user', text);
+    this._scrollToBottom();
+    this._callChat(text);
   },
 
   // ── 消息解析 ──────────────────────────────────────
@@ -137,48 +324,55 @@ Page({
 
   _parseReply(reply) {
     const segments = [];
-    let remaining = reply;
-
-    const patterns = [
-      { regex: /\[ROUTE_RESULTS:([\s\S]*?)\]/g, type: 'route' },
-      { regex: /\[BOOKING_CARD:([\s\S]*?)\]/g, type: 'booking' },
+    const tags = [
+      { prefix: '[ROUTE_RESULTS:', type: 'route' },
+      { prefix: '[BOOKING_CARD:', type: 'booking' },
     ];
+    let pos = 0;
 
-    const matches = [];
-    for (const p of patterns) {
-      let m;
-      p.regex.lastIndex = 0;
-      while ((m = p.regex.exec(reply)) !== null) {
-        try {
-          const data = JSON.parse(m[1]);
-          matches.push({ type: p.type, data, start: m.index, end: m.index + m[0].length });
-        } catch (e) {
-          console.warn('[parse] JSON parse failed:', e.message);
+    while (pos < reply.length) {
+      let best = null;
+      for (const tag of tags) {
+        const idx = reply.indexOf(tag.prefix, pos);
+        if (idx !== -1 && (!best || idx < best.idx)) {
+          best = { type: tag.type, idx, prefixLen: tag.prefix.length };
         }
       }
-    }
-
-    matches.sort((a, b) => a.start - b.start);
-
-    let cursor = 0;
-    for (const match of matches) {
-      if (match.start > cursor) {
-        const text = this._sanitize(remaining.slice(cursor, match.start));
+      if (!best) {
+        const text = this._sanitize(reply.slice(pos));
+        if (text) segments.push({ type: 'text', content: text });
+        break;
+      }
+      if (best.idx > pos) {
+        const text = this._sanitize(reply.slice(pos, best.idx));
         if (text) segments.push({ type: 'text', content: text });
       }
-      segments.push({ type: match.type, data: match.data });
-      cursor = match.end;
-    }
-
-    if (cursor < remaining.length) {
-      const text = this._sanitize(remaining.slice(cursor));
-      if (text) segments.push({ type: 'text', content: text });
+      const jsonStart = best.idx + best.prefixLen;
+      let depth = 0, jsonEnd = -1;
+      for (let j = jsonStart; j < reply.length; j++) {
+        if (reply[j] === '{') depth++;
+        else if (reply[j] === '}') { depth--; if (depth === 0) { jsonEnd = j + 1; break; } }
+      }
+      if (jsonEnd > 0) {
+        try {
+          const data = JSON.parse(reply.slice(jsonStart, jsonEnd));
+          segments.push({ type: best.type, data });
+        } catch (e) {
+          console.warn('[parse] JSON failed:', e.message);
+          segments.push({ type: 'text', content: reply.slice(best.idx, jsonEnd) });
+        }
+        pos = jsonEnd;
+        if (pos < reply.length && reply[pos] === ']') pos++;
+      } else {
+        const text = this._sanitize(reply.slice(best.idx));
+        if (text) segments.push({ type: 'text', content: text });
+        break;
+      }
     }
 
     if (segments.length === 0) {
       segments.push({ type: 'text', content: reply });
     }
-
     return segments;
   },
 

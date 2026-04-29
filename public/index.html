@@ -600,7 +600,7 @@
     // source summary
     var srcCounts = {};
     items.forEach(function(it) {
-      var sn = it.sourceName || '粤出行';
+      var sn = it.sourceName || '城际巴士';
       srcCounts[sn] = (srcCounts[sn] || 0) + 1;
     });
     var srcKeys = Object.keys(srcCounts);
@@ -616,7 +616,7 @@
       var bDistHtml = it.boardingDist ? '<span class="rr-dist-tag">约' + esc(fmtDist(it.boardingDist)) + '</span>' : '';
       var dDistHtml = it.dropoffDist ? '<span class="rr-dist-tag">约' + esc(fmtDist(it.dropoffDist)) + '</span>' : '';
       var src = it.source || 'yuecx';
-      var srcName = it.sourceName || '粤出行';
+      var srcName = it.sourceName || '城际巴士';
       var badgeHtml = '<span class="rr-source-badge ' + esc(src) + '">' + esc(srcName) + '</span>';
       el.innerHTML =
         '<div class="rr-header">' +
@@ -643,8 +643,8 @@
 
   function buildBookingCard(info) {
     var card = document.createElement('div'); card.className = 'bk-card';
-    var miniapp = info.miniappName || (info.source === 'busboss' ? '如约城际巴士' : '粤出行城际巴士');
-    var srcName = info.sourceName || (info.source === 'busboss' ? '如约城际' : '粤出行');
+    var miniapp = info.miniappName || (info.source === 'busboss' ? '如约城际巴士' : '城际巴士');
+    var srcName = info.sourceName || (info.source === 'busboss' ? '如约城际' : '城际巴士');
     var bodyHtml = '';
     [['路线',info.route],['日期',info.date],['上车',(info.boardingTime||info.fromTime||'')+' '+(info.boardingStation||'')],
      ['下车',info.dropoffStation],['票价',info.priceYuan?'¥'+info.priceYuan:''],['余票',info.residue!=null?info.residue+'张':''],
@@ -1063,7 +1063,7 @@
 
       var html = '';
       orders.forEach(function(o) {
-        var miniappName = o.miniapp ? o.miniapp.name : (o.source === 'yuecx' ? '粤出行' : '如约城际');
+        var miniappName = o.miniapp ? o.miniapp.name : (o.source === 'yuecx' ? '城际巴士' : '如约城际');
 
         html += '<div class="order-item">' +
           '<div class="order-header">' +
@@ -1150,7 +1150,7 @@
           e.target.disabled = false;
         }
       } else {
-        alert('🎫 小程序支付指引:\n\n1. 微信搜索「粤出行城际巴士」或「如约城际巴士」\n2. 进入订单页面\n3. 找到订单完成支付');
+        alert('🎫 小程序支付指引:\n\n1. 微信搜索「城际巴士」或「如约城际巴士」\n2. 进入订单页面\n3. 找到订单完成支付');
       }
     } else if (action === 'detail' || action === 'ticket') {
       try {
@@ -1168,7 +1168,7 @@
             '上车站: ' + (detail.boardingStation || '未指定'),
             '下车站: ' + (detail.dropoffStation || '未指定'),
             '票价: ¥' + detail.priceYuan,
-            '来源: ' + (detail.source === 'yuecx' ? '粤出行' : '如约城际'),
+            '来源: ' + (detail.source === 'yuecx' ? '城际巴士' : '如约城际'),
             '创建时间: ' + new Date(detail.createdAt).toLocaleString(),
           ].join('\n');
 

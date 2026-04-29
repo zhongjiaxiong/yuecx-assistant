@@ -89,6 +89,104 @@ async function requestGETv1(apiPath, params = {}) {
   return resp.json();
 }
 
+/**
+ * POST 到 /api/wg.do —— 用于 action 型接口（area.query_by_start_end 等）。
+ * 免加密接口，只需 PoW。
+ */
+async function requestActionPOST(params) {
+  const challengeHeaders = await getChallengeHeaders();
+  const body = new URLSearchParams({ corpid: CORP_ID, subAppid: APPID, appid: APPID, ...params }).toString();
+  const resp = await fetch(`${HOST}/api/wg.do`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", ...challengeHeaders },
+    body,
+    signal: AbortSignal.timeout(15000),
+  });
+  return resp.json();
+}
+
+// ── 路线可选上下车点 —— 粤出行 interval 页的 LocationId 就是从这里来的 ──
+// 缓存避免重复打后端（同一路线短时间内稳定）
+const locationCache = new Map(); // key: `${startCityId}_${endCityId}` → { at: ms, boarding: [], dropoff: [] }
+const LOCATION_TTL_MS = 30 * 60 * 1000; // 30 分钟
+
+/**
+ * 返回 { boarding: [{id, name, lat, lng, city}], dropoff: [...] }
+ * id 就是粤出行 interval.getListByCityIdAndLocationId 要求的 locationId
+ */
+async function queryRouteLocations(startCityId, endCityId) {
+  const key = `${startCityId}_${endCityId}`;
+  const hit = locationCache.get(key);
+  if (hit && Date.now() - hit.at < LOCATION_TTL_MS) return hit;
+
+  const result = await requestActionPOST({
+    action: "area.query_by_start_end",
+    start_id: startCityId,
+    end_id: endCityId,
+  });
+  if (!result?.data?.location) {
+    const empty = { at: Date.now(), boarding: [], dropoff: [] };
+    locationCache.set(key, empty);
+    return empty;
+  }
+  const boarding = [];
+  const dropoff = [];
+  for (const loc of result.data.location) {
+    const rec = {
+      id: String(loc.ID),
+      name: loc.address || loc.station_addr || "",
+      lat: parseFloat(loc.y) || null, // note: API swaps (x=lng, y=lat)
+      lng: parseFloat(loc.x) || null,
+      city: loc.city || "",
+    };
+    if (loc.locationType === 0 || loc.locationType === "0") boarding.push(rec);
+    else if (loc.locationType === 2 || loc.locationType === "2") dropoff.push(rec);
+  }
+  const entry = { at: Date.now(), boarding, dropoff };
+  locationCache.set(key, entry);
+  return entry;
+}
+
+/**
+ * 按站名模糊匹配真实 locationId。
+ * 粤出行 area.query_by_start_end 的同名站点可能有多条（如"大剧院地铁站E出口"
+ * 和"大剧院地铁站E出口（直达花都）"），后者是特定子线路，前者是通用主线。
+ * 策略：先做 exact-clean 匹配；再做去括号后 prefix 匹配；同时**惩罚**带
+ * "（直达X）""（往X方向）"等子线路标记的候选，避免误跳到冷门线路。
+ *
+ * @param {Array} locList queryRouteLocations 返回的 boarding 或 dropoff 数组
+ * @param {string} stationName 我们 DB 里班次站点的 name
+ * @returns {string|null} 命中的 locationId 或 null
+ */
+function matchRealLocationId(locList, stationName) {
+  if (!stationName || !locList?.length) return null;
+
+  const stripParen = (s) => String(s).replace(/[（(][^）)]*[）)]/g, "").replace(/\s+/g, "");
+  const isSubroute = (name) => /[（(](直达|开往|往|经|转)/.test(String(name || ""));
+  const needle = stripParen(stationName);
+  if (!needle) return null;
+
+  // 打分：exact > double-contains > prefix。子线路标记的候选统一减分。
+  const candidates = [];
+  for (const l of locList) {
+    const hay = stripParen(l.name);
+    let score = 0;
+    if (hay === needle) score = 100;
+    else if (hay.includes(needle) || needle.includes(hay)) {
+      // 选最接近长度的那个
+      score = 60 - Math.abs(hay.length - needle.length);
+    } else if (needle.length >= 4 && hay.includes(needle.slice(0, Math.min(6, needle.length - 1)))) {
+      score = 30 - Math.abs(hay.length - needle.length);
+    }
+    if (score <= 0) continue;
+    if (isSubroute(l.name)) score -= 25;
+    candidates.push({ id: l.id, name: l.name, score });
+  }
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0].id;
+}
+
 // ── Helpers ─────────────────────────────────────────────────
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
@@ -346,7 +444,35 @@ async function geocodeMissingStations() {
   }
 }
 
-module.exports = { requestGETv1, getChallengeHeaders, crawlOnDemand, syncMeta, crawlAllRoutes };
+/**
+ * 调 interval.getListByCityIdAndLocationId —— 粤出行用户点"查询"后看到的班次列表的 API。
+ * 返回的每个班次含 fillorder 页需要的全部字段（addressId/getOffAddressId/currentDateId/line）。
+ * 无需 SM4 加密（实测）。
+ *
+ * @param opts {startCityId, endCityId, takeDate, startLocationIds, endLocationIds}
+ *        locationIds 可用逗号分隔传多个候选
+ * @returns 班次数组（空数组 = 后端无班次）
+ */
+async function queryBookableIntervals({ startCityId, endCityId, takeDate, startLocationIds, endLocationIds }) {
+  const challengeHeaders = await getChallengeHeaders();
+  const body = new URLSearchParams({
+    corpid: CORP_ID, subAppid: APPID, appid: APPID,
+    action: "interval.getListByCityIdAndLocationId",
+    takeDate, startCityId, endCityId,
+    startLocationIds, endLocationIds,
+  }).toString();
+  const resp = await fetch(`${HOST}/api/wg.do`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded", ...challengeHeaders },
+    body,
+    signal: AbortSignal.timeout(15000),
+  });
+  const j = await resp.json();
+  if (j.success && Array.isArray(j.data?.intervalList)) return j.data.intervalList;
+  return [];
+}
+
+module.exports = { requestGETv1, getChallengeHeaders, crawlOnDemand, syncMeta, crawlAllRoutes, queryRouteLocations, matchRealLocationId, queryBookableIntervals };
 
 // ── CLI ─────────────────────────────────────────────────────
 

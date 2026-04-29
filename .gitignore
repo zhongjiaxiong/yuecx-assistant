@@ -5,3 +5,11 @@ data/
 *.wxapkg
 source/
 decrypted_app.wxapkg
+captured_apis.json
+sweep_result.json
+decompiled_app/
+source_app/
+miniapp_token_helper/
+.claude/
+.superpowers/
+miniprogram/project.private.config.json

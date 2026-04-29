@@ -1,4 +1,15 @@
 <view class="chat-container">
+  <!-- 手机号快捷登录 -->
+  <view class="login-bar" wx:if="{{!hasPhone}}">
+    <text class="login-text">🔒 登录后可保存订单与出行偏好</text>
+    <button
+      class="login-btn"
+      open-type="getPhoneNumber"
+      bindgetphonenumber="onGetPhoneNumber"
+      hover-class="none"
+    >手机号快捷登录</button>
+  </view>
+
   <!-- 定位授权提示 -->
   <view class="location-bar" wx:if="{{!locationGranted}}">
     <text class="location-text">开启定位可自动推荐最近上车站</text>
@@ -14,6 +25,11 @@
     enhanced
     show-scrollbar="{{false}}"
   >
+    <!-- 欢迎提示横幅 -->
+    <view class="welcome-hint" wx:if="{{messages.length === 0}}">
+      <text>广东省城际巴士聚合平台 · 多源比价 · 实时数据</text>
+    </view>
+
     <!-- 欢迎消息 -->
     <view class="message assistant" wx:if="{{messages.length === 0}}">
       <view class="avatar assistant-avatar">粤</view>
@@ -62,10 +78,26 @@
     <view id="msg-loading" class="message assistant" wx:if="{{loading}}">
       <view class="avatar assistant-avatar">粤</view>
       <view class="bubble loading-bubble">
-        <view class="loading-dots">
-          <view class="dot"></view>
-          <view class="dot"></view>
-          <view class="dot"></view>
+        <view class="step-bar">
+          <view class="step-item">
+            <view class="step-dot {{loadingStep >= 0 ? (loadingStep > 0 ? 'done' : 'active') : ''}}">💭</view>
+            <text class="step-label {{loadingStep >= 0 ? (loadingStep > 0 ? 'done' : 'active') : ''}}">思考</text>
+          </view>
+          <view class="step-line {{loadingStep >= 1 ? 'done' : ''}}"></view>
+          <view class="step-item">
+            <view class="step-dot {{loadingStep >= 1 ? (loadingStep > 1 ? 'done' : 'active') : ''}}">📍</view>
+            <text class="step-label {{loadingStep >= 1 ? (loadingStep > 1 ? 'done' : 'active') : ''}}">定位</text>
+          </view>
+          <view class="step-line {{loadingStep >= 2 ? 'done' : ''}}"></view>
+          <view class="step-item">
+            <view class="step-dot {{loadingStep >= 2 ? (loadingStep > 2 ? 'done' : 'active') : ''}}">🔍</view>
+            <text class="step-label {{loadingStep >= 2 ? (loadingStep > 2 ? 'done' : 'active') : ''}}">查询</text>
+          </view>
+          <view class="step-line {{loadingStep >= 3 ? 'done' : ''}}"></view>
+          <view class="step-item">
+            <view class="step-dot {{loadingStep >= 3 ? 'done' : ''}}">✅</view>
+            <text class="step-label {{loadingStep >= 3 ? 'done' : ''}}">完成</text>
+          </view>
         </view>
         <text class="loading-text">{{loadingText}}</text>
       </view>
@@ -76,19 +108,50 @@
 
   <!-- 输入区 -->
   <view class="input-area">
-    <input
-      class="chat-input"
-      value="{{inputValue}}"
-      placeholder="说说你要去哪..."
-      confirm-type="send"
-      bindinput="onInput"
-      bindconfirm="onSend"
-      disabled="{{loading}}"
-      adjust-position="{{true}}"
-      cursor-spacing="20"
-    />
-    <view class="send-btn {{inputValue ? 'active' : ''}}" bindtap="onSend">
-      <text>发送</text>
+    <view class="mode-toggle" bindtap="toggleInputMode">
+      <image wx:if="{{inputMode === 'text'}}" src="/assets/icon-mic.png" class="toggle-icon" />
+      <image wx:else src="/assets/icon-kbd.png" class="toggle-icon" />
     </view>
+    <block wx:if="{{inputMode === 'text'}}">
+      <input
+        class="chat-input"
+        value="{{inputValue}}"
+        placeholder="说说你要去哪..."
+        confirm-type="send"
+        bindinput="onInput"
+        bindconfirm="onSend"
+        disabled="{{loading}}"
+        adjust-position="{{true}}"
+        cursor-spacing="20"
+      />
+      <view class="send-btn {{inputValue ? 'active' : ''}}" bindtap="onSend">
+        <text>发送</text>
+      </view>
+    </block>
+    <block wx:else>
+      <view
+        class="voice-btn {{recording ? 'recording' : ''}}"
+        bindtouchstart="onTouchStartRecord"
+        bindtouchend="onTouchEndRecord"
+        bindtouchcancel="onTouchCancelRecord"
+      >
+        <text>{{recording ? '松开 发送' : '按住 说话'}}</text>
+      </view>
+    </block>
+    <view class="map-btn" bindtap="onOpenMap" wx:if="{{lastRouteContext}}">
+      <text>📍</text>
+    </view>
+  </view>
+
+  <!-- 录音遮罩 -->
+  <view class="record-overlay" wx:if="{{recording}}">
+    <view class="record-wave">
+      <view class="wave-bar"></view>
+      <view class="wave-bar"></view>
+      <view class="wave-bar"></view>
+      <view class="wave-bar"></view>
+      <view class="wave-bar"></view>
+    </view>
+    <text class="record-tip">正在录音...</text>
   </view>
 </view>

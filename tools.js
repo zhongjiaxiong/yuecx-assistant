@@ -637,6 +637,15 @@ async function bookInterval({ date, startCity, endCity, intervalId, rank, boardi
     }
   }
 
+  console.log("[book_interval] path inputs:", JSON.stringify({
+    boarding_adcode: resolvedBoarding?.adcode,
+    boarding_name: resolvedBoarding?.name,
+    boarding_id: resolvedBoarding?.id,
+    dropoff_adcode: resolvedDropoff?.adcode,
+    dropoff_name: resolvedDropoff?.name,
+    dropoff_id: resolvedDropoff?.id,
+    hasBookable: !!bookable,
+  }));
   const miniappPath = generateMiniappPath(matchedSource, {
     intervalId: iv.interval_id,
     date,
@@ -648,6 +657,7 @@ async function bookInterval({ date, startCity, endCity, intervalId, rank, boardi
     dropoff: resolvedDropoff,
     bookable,
   });
+  console.log("[book_interval] path out:", miniappPath);
 
   return {
     success: true,

@@ -115,3 +115,53 @@ CREATE TABLE IF NOT EXISTS crawl_logs (
 
 CREATE INDEX IF NOT EXISTS idx_crawl_logs_crawler_started
   ON crawl_logs(crawler, started_at DESC);
+
+-- 用户乘车人
+CREATE TABLE IF NOT EXISTS user_passengers (
+  id          SERIAL PRIMARY KEY,
+  user_id     VARCHAR NOT NULL,
+  name        VARCHAR NOT NULL,
+  id_type     VARCHAR NOT NULL DEFAULT 'id_card',
+  id_number   VARCHAR NOT NULL,
+  phone       VARCHAR,
+  is_default  BOOLEAN DEFAULT FALSE,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_passengers_user ON user_passengers(user_id);
+
+-- 用户常用地址（家/公司/其他）
+CREATE TABLE IF NOT EXISTS user_addresses (
+  id          SERIAL PRIMARY KEY,
+  user_id     VARCHAR NOT NULL,
+  label       VARCHAR NOT NULL,
+  city        VARCHAR,
+  address     TEXT,
+  lat         DOUBLE PRECISION,
+  lng         DOUBLE PRECISION,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_addresses_user ON user_addresses(user_id);
+
+-- 用户收藏路线（隐式沉淀 + 显式收藏）
+CREATE TABLE IF NOT EXISTS user_favorite_routes (
+  id           SERIAL PRIMARY KEY,
+  user_id      VARCHAR NOT NULL,
+  start_city   VARCHAR NOT NULL,
+  end_city     VARCHAR NOT NULL,
+  use_count    INT DEFAULT 1,
+  last_used_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at   TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, start_city, end_city)
+);
+CREATE INDEX IF NOT EXISTS idx_fav_routes_user ON user_favorite_routes(user_id, last_used_at DESC);
+
+-- 用户按城市的常用上车点偏好
+CREATE TABLE IF NOT EXISTS user_boarding_prefs (
+  user_id     VARCHAR NOT NULL,
+  city        VARCHAR NOT NULL,
+  station     VARCHAR NOT NULL,
+  updated_at  TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (user_id, city)
+);

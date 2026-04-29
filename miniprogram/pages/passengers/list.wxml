@@ -1,0 +1,38 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="empty">加载中...</view>
+
+  <block wx:elif="{{passengers.length > 0}}">
+    <view class="list">
+      <view
+        class="item"
+        wx:for="{{passengers}}"
+        wx:key="id"
+        bindtap="onEdit"
+        data-id="{{item.id}}"
+      >
+        <view class="main">
+          <view class="row1">
+            <text class="name">{{item.name}}</text>
+            <text class="default-tag" wx:if="{{item.isDefault}}">默认</text>
+          </view>
+          <view class="row2">
+            <text class="id-type">{{item.idType === 'id_card' ? '身份证' : '护照'}}</text>
+            <text class="id-number">{{item.idNumberMasked}}</text>
+          </view>
+          <view class="row3" wx:if="{{item.phone}}">
+            <text class="phone">{{item.phoneMasked}}</text>
+          </view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="empty">
+    <view class="empty-icon">👤</view>
+    <view class="empty-text">暂无乘车人</view>
+    <view class="empty-sub">添加后下单可自动填充</view>
+  </view>
+
+  <view class="add-btn" bindtap="onAdd">+ 新增乘车人</view>
+</view>

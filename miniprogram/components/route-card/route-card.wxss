@@ -143,6 +143,41 @@
   border: 1rpx solid #1677ff;
 }
 
+/* 多源汇总 */
+.source-summary {
+  padding: 12rpx 24rpx;
+  background: #fafafa;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.summary-text {
+  font-size: 22rpx;
+  color: #666;
+  line-height: 1.6;
+}
+
+/* 来源角标 */
+.source-badge {
+  display: inline-block;
+  padding: 2rpx 12rpx;
+  border-radius: 16rpx;
+  font-size: 18rpx;
+  font-weight: 600;
+  margin-left: 8rpx;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.source-yuecx {
+  background: #e8f8ee;
+  color: #07c160;
+}
+
+.source-busboss {
+  background: #e6f0ff;
+  color: #1677ff;
+}
+
 .card-tip {
   padding: 16rpx 24rpx;
   font-size: 22rpx;

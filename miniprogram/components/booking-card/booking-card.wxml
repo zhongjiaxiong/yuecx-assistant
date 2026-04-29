@@ -40,6 +40,6 @@
   </view>
 
   <view class="action-area">
-    <view class="buy-btn" bindtap="onBuy">去粤出行购票</view>
+    <view class="buy-btn" bindtap="onBuy">去购票</view>
   </view>
 </view>

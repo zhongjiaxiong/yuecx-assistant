@@ -16,6 +16,25 @@
     </view>
   </view>
 
+  <!-- 偏好摘要 -->
+  <view class="pref-card" wx:if="{{phone && prefSummary}}">
+    <view class="pref-row" wx:if="{{prefSummary.favoriteRouteText}}">
+      <text class="pref-label">🚌 常走</text>
+      <text class="pref-value">{{prefSummary.favoriteRouteText}}</text>
+    </view>
+    <view class="pref-row" wx:if="{{prefSummary.boardingText}}">
+      <text class="pref-label">📍 常用上车</text>
+      <text class="pref-value">{{prefSummary.boardingText}}</text>
+    </view>
+    <view class="pref-row" wx:if="{{prefSummary.passengerCount > 0}}">
+      <text class="pref-label">👤 乘车人</text>
+      <text class="pref-value">{{prefSummary.passengerCount}} 位</text>
+    </view>
+    <view class="pref-empty" wx:if="{{!prefSummary.hasAny}}">
+      还没有出行偏好记录 · 多聊几次，AI 会帮你记住
+    </view>
+  </view>
+
   <!-- 登录按钮 -->
   <view class="section" wx:if="{{!phone}}">
     <button
@@ -35,9 +54,24 @@
       <text class="menu-text">开始咨询</text>
       <text class="menu-arrow">›</text>
     </view>
+    <view class="menu-item" bindtap="onGoOrders">
+      <text class="menu-icon">🎫</text>
+      <text class="menu-text">我的订单</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" wx:if="{{phone}}" bindtap="onGoPassengers">
+      <text class="menu-icon">👤</text>
+      <text class="menu-text">我的乘车人</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" wx:if="{{phone}}" bindtap="onGoAddresses">
+      <text class="menu-icon">🏠</text>
+      <text class="menu-text">常用地址</text>
+      <text class="menu-arrow">›</text>
+    </view>
     <view class="menu-item" bindtap="onOpenYuecx">
       <text class="menu-icon">🚌</text>
-      <text class="menu-text">打开粤出行</text>
+      <text class="menu-text">打开购票平台</text>
       <text class="menu-arrow">›</text>
     </view>
     <view class="menu-item" bindtap="onSetServer" wx:if="{{isDev}}">

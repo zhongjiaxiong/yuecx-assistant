@@ -1,0 +1,30 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="empty">加载中...</view>
+
+  <block wx:elif="{{addresses.length > 0}}">
+    <view class="list">
+      <view
+        class="item"
+        wx:for="{{addresses}}"
+        wx:key="id"
+        bindtap="onEdit"
+        data-id="{{item.id}}"
+      >
+        <view class="tag tag-{{item.label}}">{{item.labelText}}</view>
+        <view class="main">
+          <view class="city">{{item.city || '未填城市'}}</view>
+          <view class="detail">{{item.address || '无详细地址'}}</view>
+        </view>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+  </block>
+
+  <view wx:else class="empty">
+    <view class="empty-icon">🏠</view>
+    <view class="empty-text">暂无常用地址</view>
+    <view class="empty-sub">添加家/公司后系统自动推荐最近上车点</view>
+  </view>
+
+  <view class="add-btn" bindtap="onAdd">+ 新增地址</view>
+</view>

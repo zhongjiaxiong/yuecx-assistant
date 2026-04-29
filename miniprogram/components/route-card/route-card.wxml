@@ -4,11 +4,19 @@
     <text class="route-date">{{data.date}}</text>
   </view>
 
+  <!-- 多源汇总 -->
+  <view class="source-summary" wx:if="{{summary}}">
+    <text class="summary-text">{{summary}}</text>
+  </view>
+
   <view class="items">
     <view class="item" wx:for="{{data.items}}" wx:key="index">
       <view class="item-row main-row">
         <view class="item-index">{{index + 1}}</view>
         <view class="item-time">{{item.time}}</view>
+        <view class="source-badge source-{{item.source || 'yuecx'}}" wx:if="{{item.sourceName}}">
+          {{item.sourceName}}
+        </view>
         <view class="item-price">¥{{item.price}}</view>
         <view class="item-seats {{item.seats <= 3 ? 'seats-low' : ''}}">
           余{{item.seats}}座

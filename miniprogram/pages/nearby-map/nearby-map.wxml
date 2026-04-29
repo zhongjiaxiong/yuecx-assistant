@@ -1,0 +1,41 @@
+<view class="map-page">
+  <map
+    id="map-view"
+    class="map-view"
+    latitude="{{latitude}}"
+    longitude="{{longitude}}"
+    scale="{{scale}}"
+    markers="{{markers}}"
+    show-location
+    enable-scroll
+    enable-zoom
+  />
+
+  <view class="station-panel">
+    <view class="panel-header">
+      <text class="panel-title">附近上车站</text>
+      <text class="panel-hint" wx:if="{{userAddress}}">📍 {{userAddress}}</text>
+    </view>
+
+    <view class="loading-tip" wx:if="{{loadingStations}}">正在查询附近上车站...</view>
+    <view class="empty-tip" wx:elif="{{!stations.length}}">暂无上车站数据</view>
+
+    <scroll-view scroll-y class="station-list" wx:else>
+      <view
+        class="station-item"
+        wx:for="{{stations}}"
+        wx:key="index"
+        bindtap="onSelectStation"
+        data-name="{{item.name}}"
+      >
+        <view class="station-rank">{{index + 1}}</view>
+        <view class="station-info">
+          <text class="station-name">{{item.name}}</text>
+          <text class="station-meta">{{item.intervalCount}}个班次{{item.timeRange ? ' · ' + item.timeRange : ''}}</text>
+        </view>
+        <text class="station-dist" wx:if="{{item.distText}}">{{item.distText}}</text>
+        <view class="select-btn">选择</view>
+      </view>
+    </scroll-view>
+  </view>
+</view>

@@ -1,7 +1,13 @@
 {
   "pages": [
     "pages/chat/chat",
-    "pages/profile/profile"
+    "pages/profile/profile",
+    "pages/orders/orders",
+    "pages/nearby-map/nearby-map",
+    "pages/passengers/list",
+    "pages/passengers/edit",
+    "pages/addresses/list",
+    "pages/addresses/edit"
   ],
   "window": {
     "navigationBarBackgroundColor": "#1677ff",
@@ -32,9 +38,12 @@
   "permission": {
     "scope.userLocation": {
       "desc": "用于推荐离你最近的上车站点"
+    },
+    "scope.record": {
+      "desc": "用于语音输入查询班次"
     }
   },
-  "requiredPrivateInfos": ["getLocation"],
+  "requiredPrivateInfos": ["getLocation", "chooseLocation"],
   "style": "v2",
   "sitemapLocation": "sitemap.json"
 }

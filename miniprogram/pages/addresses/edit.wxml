@@ -1,0 +1,53 @@
+<view class="page">
+  <view class="form">
+    <view class="field">
+      <text class="label">类型</text>
+      <picker mode="selector" range="{{labelOptions}}" value="{{labelIndex}}" bindchange="onLabelChange">
+        <view class="picker-val">
+          {{labelOptions[labelIndex]}}
+          <text class="picker-arrow">›</text>
+        </view>
+      </picker>
+    </view>
+
+    <view class="field">
+      <text class="label">城市</text>
+      <input
+        class="input"
+        placeholder="如 深圳"
+        value="{{form.city}}"
+        bindinput="onInput"
+        data-key="city"
+        maxlength="20"
+      />
+    </view>
+
+    <view class="field">
+      <text class="label">详细地址</text>
+      <input
+        class="input"
+        placeholder="小区/街道/门牌（可选）"
+        value="{{form.address}}"
+        bindinput="onInput"
+        data-key="address"
+        maxlength="80"
+      />
+    </view>
+
+    <view class="field">
+      <text class="label">坐标</text>
+      <view class="coord-val" bindtap="onPickLocation">
+        <block wx:if="{{form.lat && form.lng}}">
+          <text class="coord-text">{{form.lat}}, {{form.lng}}</text>
+        </block>
+        <block wx:else>
+          <text class="coord-placeholder">点此选择地图位置</text>
+        </block>
+        <text class="picker-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <button class="save-btn" bindtap="onSave" loading="{{saving}}">保存</button>
+  <button class="delete-btn" wx:if="{{editingId}}" bindtap="onDelete">删除</button>
+</view>

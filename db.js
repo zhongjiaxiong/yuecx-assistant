@@ -13,12 +13,55 @@ const pool = new Pool({
   ssl: process.env.DATABASE_URL?.includes("supabase")
     ? { rejectUnauthorized: false }
     : false,
+  max: 5,
+  idleTimeoutMillis: 20000,
+  connectionTimeoutMillis: 10000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
+
+pool.on("error", (err) => {
+  console.error("[db] pool idle client error (non-fatal):", err.message);
+});
+
+const TRANSIENT_RE = /terminated|ECONNRESET|ETIMEDOUT|ENOTFOUND|socket|network|TLS|Connection refused/i;
+
+async function queryRetry(text, params, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await pool.query(text, params);
+    } catch (err) {
+      if (!TRANSIENT_RE.test(err.message) || attempt === retries) throw err;
+      console.warn(`[db] query retry ${attempt}/${retries}: ${err.message}`);
+      await new Promise(r => setTimeout(r, 400 * attempt));
+    }
+  }
+}
+
+// ── In-memory city cache (fallback when DB is unreachable) ──
+
+const _cityCache = new Map();
+
+function _cacheCities(rows) {
+  for (const r of rows) _cityCache.set(r.city_id, { city_id: r.city_id, city_name: r.city_name, source: r.source });
+}
+
+function _searchCityCache(name) {
+  const results = [];
+  for (const c of _cityCache.values()) {
+    if (c.city_name === name || c.city_name.includes(name) || name.includes(c.city_name)) {
+      results.push(c);
+    }
+  }
+  results.sort((a, b) => (b.city_name === name ? 1 : 0) - (a.city_name === name ? 1 : 0) || b.city_name.length - a.city_name.length);
+  return results.slice(0, 10);
+}
 
 // ── Cities ──────────────────────────────────────────────────
 
 async function upsertCity(cityId, cityName, source = "yuecx") {
-  await pool.query(
+  _cityCache.set(cityId, { city_id: cityId, city_name: cityName, source });
+  await queryRetry(
     `INSERT INTO cities (city_id, city_name, source, updated_at)
      VALUES ($1, $2, $3, NOW())
      ON CONFLICT (city_id) DO UPDATE SET city_name = $2, updated_at = NOW()`,
@@ -27,30 +70,46 @@ async function upsertCity(cityId, cityName, source = "yuecx") {
 }
 
 async function findCityByName(name) {
-  const { rows } = await pool.query(
-    `SELECT city_id, city_name, source FROM cities
-     WHERE city_name = $1 OR city_name LIKE $2 OR $1 LIKE city_name || '%'
-     ORDER BY (city_name = $1) DESC, length(city_name) DESC
-     LIMIT 10`,
-    [name, `%${name}%`]
-  );
-  return rows;
+  try {
+    const { rows } = await queryRetry(
+      `SELECT city_id, city_name, source FROM cities
+       WHERE city_name = $1 OR city_name LIKE $2 OR $1 LIKE city_name || '%'
+       ORDER BY (city_name = $1) DESC, length(city_name) DESC
+       LIMIT 10`,
+      [name, `%${name}%`]
+    );
+    _cacheCities(rows);
+    return rows;
+  } catch (err) {
+    console.warn(`[db] findCityByName DB failed, using cache: ${err.message}`);
+    const cached = _searchCityCache(name);
+    if (cached.length > 0) return cached;
+    throw err;
+  }
 }
 
 async function findCityByNameAndSource(name, source) {
-  const { rows } = await pool.query(
-    `SELECT city_id, city_name, source FROM cities
-     WHERE (city_name = $1 OR city_name LIKE $2 OR $1 LIKE city_name || '%')
-       AND source = $3
-     ORDER BY (city_name = $1) DESC, length(city_name) DESC
-     LIMIT 5`,
-    [name, `%${name}%`, source]
-  );
-  return rows;
+  try {
+    const { rows } = await queryRetry(
+      `SELECT city_id, city_name, source FROM cities
+       WHERE (city_name = $1 OR city_name LIKE $2 OR $1 LIKE city_name || '%')
+         AND source = $3
+       ORDER BY (city_name = $1) DESC, length(city_name) DESC
+       LIMIT 5`,
+      [name, `%${name}%`, source]
+    );
+    _cacheCities(rows);
+    return rows;
+  } catch (err) {
+    console.warn(`[db] findCityByNameAndSource DB failed, using cache: ${err.message}`);
+    const cached = _searchCityCache(name).filter(c => c.source === source);
+    if (cached.length > 0) return cached.slice(0, 5);
+    throw err;
+  }
 }
 
 async function getAllCities() {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT city_id, city_name FROM cities ORDER BY city_name`
   );
   return rows;
@@ -59,7 +118,7 @@ async function getAllCities() {
 // ── Routes ──────────────────────────────────────────────────
 
 async function upsertRoute(startCityId, endCityId, source = "yuecx") {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `INSERT INTO routes (start_city_id, end_city_id, source)
      VALUES ($1, $2, $3)
      ON CONFLICT (start_city_id, end_city_id, source) DO NOTHING
@@ -67,7 +126,7 @@ async function upsertRoute(startCityId, endCityId, source = "yuecx") {
     [startCityId, endCityId, source]
   );
   if (rows.length) return rows[0].id;
-  const res = await pool.query(
+  const res = await queryRetry(
     `SELECT id FROM routes WHERE start_city_id=$1 AND end_city_id=$2 AND source=$3`,
     [startCityId, endCityId, source]
   );
@@ -75,7 +134,7 @@ async function upsertRoute(startCityId, endCityId, source = "yuecx") {
 }
 
 async function getRouteId(startCityId, endCityId, source = "yuecx") {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT id FROM routes WHERE start_city_id=$1 AND end_city_id=$2 AND source=$3`,
     [startCityId, endCityId, source]
   );
@@ -83,7 +142,7 @@ async function getRouteId(startCityId, endCityId, source = "yuecx") {
 }
 
 async function getHotRoutes() {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT r.id, r.start_city_id, r.end_city_id,
             c1.city_name as start_name, c2.city_name as end_name
      FROM routes r
@@ -95,7 +154,7 @@ async function getHotRoutes() {
 }
 
 async function getAllRoutes() {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT r.id, r.start_city_id, r.end_city_id,
             c1.city_name as start_name, c2.city_name as end_name
      FROM routes r
@@ -107,7 +166,7 @@ async function getAllRoutes() {
 }
 
 async function getRoutesBySource(source) {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT r.id, r.start_city_id, r.end_city_id,
             c1.city_name as start_name, c2.city_name as end_name
      FROM routes r
@@ -121,7 +180,7 @@ async function getRoutesBySource(source) {
 }
 
 async function getLastCrawlTime(crawlerName) {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT started_at FROM crawl_logs
      WHERE crawler = $1 AND status = 'success'
      ORDER BY started_at DESC LIMIT 1`,
@@ -131,7 +190,7 @@ async function getLastCrawlTime(crawlerName) {
 }
 
 async function getDestinations(startCityName) {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT c2.city_id, c2.city_name
      FROM routes r
      JOIN cities c1 ON r.start_city_id = c1.city_id
@@ -144,7 +203,7 @@ async function getDestinations(startCityName) {
 }
 
 async function updateRouteLastCrawl(routeId) {
-  await pool.query(
+  await queryRetry(
     `UPDATE routes SET last_crawl_at = NOW() WHERE id = $1`,
     [routeId]
   );
@@ -156,6 +215,9 @@ async function upsertIntervals(intervals) {
   if (!intervals.length) return;
   const BATCH = 20;
   const client = await pool.connect();
+  client.on("error", (err) => {
+    console.error("[db] upsertIntervals client error (non-fatal):", err.message);
+  });
   try {
     await client.query("BEGIN");
     for (let i = 0; i < intervals.length; i += BATCH) {
@@ -193,15 +255,15 @@ async function upsertIntervals(intervals) {
     }
     await client.query("COMMIT");
   } catch (err) {
-    await client.query("ROLLBACK");
+    try { await client.query("ROLLBACK"); } catch (_) {}
     throw err;
   } finally {
-    client.release();
+    client.release(true);
   }
 }
 
 async function queryIntervals(routeId, takeDate) {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT interval_id, from_time, interval_name, price_fen, residue,
             status, line_id, boarding_stations, dropoff_stations, crawl_time, source
      FROM intervals
@@ -216,7 +278,7 @@ async function queryIntervals(routeId, takeDate) {
  * 跨 source 聚合查询: 按城市名查所有源的班次, 按 from_time 排序
  */
 async function queryIntervalsByCity(startCityName, endCityName, takeDate) {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT i.interval_id, i.from_time, i.interval_name, i.price_fen, i.residue,
             i.status, i.line_id, i.boarding_stations, i.dropoff_stations,
             i.crawl_time, i.source,
@@ -236,7 +298,7 @@ async function queryIntervalsByCity(startCityName, endCityName, takeDate) {
 }
 
 async function getCacheAge(routeId, takeDate) {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT MAX(crawl_time) as latest FROM intervals
      WHERE route_id = $1 AND take_date = $2`,
     [routeId, takeDate]
@@ -246,7 +308,7 @@ async function getCacheAge(routeId, takeDate) {
 }
 
 async function cleanExpired() {
-  const { rowCount } = await pool.query(
+  const { rowCount } = await queryRetry(
     `DELETE FROM intervals WHERE take_date < CURRENT_DATE - 1`
   );
   return rowCount;
@@ -255,7 +317,7 @@ async function cleanExpired() {
 // ── Station Coords ──────────────────────────────────────────
 
 async function upsertStationCoord(name, lat, lng, city) {
-  await pool.query(
+  await queryRetry(
     `INSERT INTO station_coords (station_name, lat, lng, city, updated_at)
      VALUES ($1, $2, $3, $4, NOW())
      ON CONFLICT (station_name) DO UPDATE SET lat=$2, lng=$3, city=$4, updated_at=NOW()`,
@@ -276,7 +338,7 @@ async function upsertStationCoordsBatch(coords) {
       values.push(c.name, c.lat, c.lng, c.city || null);
       idx += 4;
     }
-    await pool.query(
+    await queryRetry(
       `INSERT INTO station_coords (station_name, lat, lng, city, updated_at)
        VALUES ${phs.join(",")}
        ON CONFLICT (station_name) DO UPDATE SET lat=EXCLUDED.lat, lng=EXCLUDED.lng, city=EXCLUDED.city, updated_at=NOW()`,
@@ -287,17 +349,22 @@ async function upsertStationCoordsBatch(coords) {
 
 async function getStationCoords(names) {
   if (!names.length) return new Map();
-  const { rows } = await pool.query(
-    `SELECT station_name, lat, lng FROM station_coords WHERE station_name = ANY($1)`,
-    [names]
-  );
-  const map = new Map();
-  for (const r of rows) map.set(r.station_name, { lat: r.lat, lng: r.lng });
-  return map;
+  try {
+    const { rows } = await queryRetry(
+      `SELECT station_name, lat, lng FROM station_coords WHERE station_name = ANY($1)`,
+      [names]
+    );
+    const map = new Map();
+    for (const r of rows) map.set(r.station_name, { lat: r.lat, lng: r.lng });
+    return map;
+  } catch (err) {
+    console.warn(`[db] getStationCoords failed, returning empty: ${err.message}`);
+    return new Map();
+  }
 }
 
 async function getAllStationNames() {
-  const { rows } = await pool.query(`SELECT station_name FROM station_coords`);
+  const { rows } = await queryRetry(`SELECT station_name FROM station_coords`);
   return new Set(rows.map((r) => r.station_name));
 }
 
@@ -305,7 +372,7 @@ async function getAllStationNames() {
 
 async function migrate() {
   const sql = fs.readFileSync(path.join(__dirname, "schema.sql"), "utf-8");
-  await pool.query(sql);
+  await queryRetry(sql);
   console.log("Migration complete.");
 }
 
@@ -313,7 +380,7 @@ async function migrate() {
 
 async function saveOrder(order) {
   try {
-    await pool.query(
+    await queryRetry(
       `INSERT INTO orders (
         order_id, source, status, interval_id, date,
         start_city, end_city, boarding_station, dropoff_station,
@@ -340,7 +407,7 @@ async function saveOrder(order) {
 }
 
 async function getOrderById(orderId) {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT * FROM orders WHERE order_id = $1`,
     [orderId]
   );
@@ -370,7 +437,7 @@ async function listOrders({ userId, status, page = 1, limit = 20 }) {
   params.push(limit);
   params.push(offset);
   
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT * FROM orders ${whereClause} ORDER BY created_at DESC LIMIT $${idx} OFFSET $${idx+1}`,
     params
   );
@@ -395,7 +462,7 @@ async function listOrders({ userId, status, page = 1, limit = 20 }) {
 
 async function updateOrderStatus(orderId, status, extra = {}) {
   try {
-    await pool.query(
+    await queryRetry(
       `UPDATE orders SET status = $2, updated_at = NOW() WHERE order_id = $1`,
       [orderId, status]
     );
@@ -409,7 +476,7 @@ async function updateOrderStatus(orderId, status, extra = {}) {
 // ── Monitor Dashboard ────────────────────────────────────────
 
 async function getMonitorOverview() {
-  const { rows } = await pool.query(`
+  const { rows } = await queryRetry(`
     SELECT
       (SELECT COUNT(DISTINCT city_id) FROM cities) AS city_count,
       (SELECT COUNT(*) FROM routes) AS total_route_count,
@@ -418,7 +485,7 @@ async function getMonitorOverview() {
   `);
   const overview = rows[0];
 
-  const { rows: srcRows } = await pool.query(`
+  const { rows: srcRows } = await queryRetry(`
     SELECT r.source,
            COUNT(DISTINCT r.id) AS route_count,
            COUNT(i.id) AS interval_count
@@ -441,7 +508,7 @@ async function getMonitorOverview() {
 }
 
 async function getDataCoverage() {
-  const { rows } = await pool.query(`
+  const { rows } = await queryRetry(`
     WITH date_range AS (
       SELECT generate_series(CURRENT_DATE, CURRENT_DATE + 14, '1 day'::interval)::date AS dt
     ),
@@ -501,7 +568,7 @@ async function getDataCoverage() {
 async function getDataAnomalies() {
   const anomalies = [];
 
-  const { rows: zeroResidueRows } = await pool.query(`
+  const { rows: zeroResidueRows } = await queryRetry(`
     SELECT r.id AS route_id, c1.city_name AS start_city, c2.city_name AS end_city,
            r.source, i.take_date,
            COUNT(*) AS total, SUM(CASE WHEN i.residue = 0 THEN 1 ELSE 0 END) AS zero_cnt
@@ -524,7 +591,7 @@ async function getDataAnomalies() {
     });
   }
 
-  const { rows: priceRows } = await pool.query(`
+  const { rows: priceRows } = await queryRetry(`
     SELECT c1.city_name AS start_city, c2.city_name AS end_city, r.source,
            i.take_date, i.from_time, i.price_fen, i.interval_name
     FROM intervals i
@@ -546,7 +613,7 @@ async function getDataAnomalies() {
     });
   }
 
-  const { rows: staleRows } = await pool.query(`
+  const { rows: staleRows } = await queryRetry(`
     SELECT r.id, c1.city_name AS start_city, c2.city_name AS end_city, r.source, r.last_crawl_at
     FROM routes r
     JOIN cities c1 ON r.start_city_id = c1.city_id AND r.source = c1.source
@@ -628,7 +695,7 @@ async function getCrawlerHealth() {
 // ── Crawl Logs ───────────────────────────────────────────────
 
 async function startCrawlLog(crawler, triggeredBy) {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `INSERT INTO crawl_logs (crawler, triggered_by, status, started_at)
      VALUES ($1, $2, 'running', NOW())
      RETURNING id`,
@@ -638,7 +705,7 @@ async function startCrawlLog(crawler, triggeredBy) {
 }
 
 async function finishCrawlLog(logId, recordCount, meta = {}) {
-  await pool.query(
+  await queryRetry(
     `UPDATE crawl_logs
      SET status = 'success',
          finished_at = NOW(),
@@ -651,7 +718,7 @@ async function finishCrawlLog(logId, recordCount, meta = {}) {
 }
 
 async function failCrawlLog(logId, errorMessage) {
-  await pool.query(
+  await queryRetry(
     `UPDATE crawl_logs
      SET status = 'failed',
          finished_at = NOW(),
@@ -663,7 +730,7 @@ async function failCrawlLog(logId, errorMessage) {
 }
 
 async function getCrawlLogs(days = 14) {
-  const { rows } = await pool.query(
+  const { rows } = await queryRetry(
     `SELECT id, crawler, triggered_by, status, started_at, finished_at,
             duration_ms, record_count, error_message, meta
      FROM crawl_logs
@@ -672,6 +739,143 @@ async function getCrawlLogs(days = 14) {
     [days]
   );
   return rows;
+}
+
+// ── User Profile: Passengers ────────────────────────────────
+
+async function listPassengers(userId) {
+  const { rows } = await pool.query(
+    `SELECT id, name, id_type, id_number, phone, is_default, created_at, updated_at
+     FROM user_passengers WHERE user_id = $1
+     ORDER BY is_default DESC, created_at DESC`,
+    [userId]
+  );
+  return rows;
+}
+
+async function createPassenger(userId, { name, idType = "id_card", idNumber, phone, isDefault = false }) {
+  if (isDefault) {
+    await pool.query(`UPDATE user_passengers SET is_default=FALSE WHERE user_id=$1`, [userId]);
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO user_passengers (user_id, name, id_type, id_number, phone, is_default)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [userId, name, idType, idNumber, phone || null, isDefault]
+  );
+  return rows[0];
+}
+
+async function updatePassenger(userId, id, patch) {
+  if (patch.isDefault) {
+    await pool.query(`UPDATE user_passengers SET is_default=FALSE WHERE user_id=$1`, [userId]);
+  }
+  const { rows } = await pool.query(
+    `UPDATE user_passengers SET
+       name      = COALESCE($3, name),
+       id_type   = COALESCE($4, id_type),
+       id_number = COALESCE($5, id_number),
+       phone     = COALESCE($6, phone),
+       is_default= COALESCE($7, is_default),
+       updated_at= NOW()
+     WHERE user_id=$1 AND id=$2 RETURNING *`,
+    [userId, id, patch.name ?? null, patch.idType ?? null, patch.idNumber ?? null, patch.phone ?? null, patch.isDefault ?? null]
+  );
+  return rows[0];
+}
+
+async function deletePassenger(userId, id) {
+  const { rowCount } = await pool.query(
+    `DELETE FROM user_passengers WHERE user_id=$1 AND id=$2`,
+    [userId, id]
+  );
+  return rowCount > 0;
+}
+
+// ── User Profile: Addresses ─────────────────────────────────
+
+async function listAddresses(userId) {
+  const { rows } = await pool.query(
+    `SELECT id, label, city, address, lat, lng, created_at, updated_at
+     FROM user_addresses WHERE user_id = $1
+     ORDER BY CASE label WHEN 'home' THEN 0 WHEN 'company' THEN 1 ELSE 2 END, created_at DESC`,
+    [userId]
+  );
+  return rows;
+}
+
+async function upsertAddress(userId, { id, label, city, address, lat, lng }) {
+  if (id) {
+    const { rows } = await pool.query(
+      `UPDATE user_addresses SET label=$3, city=$4, address=$5, lat=$6, lng=$7, updated_at=NOW()
+       WHERE user_id=$1 AND id=$2 RETURNING *`,
+      [userId, id, label, city || null, address || null, lat || null, lng || null]
+    );
+    return rows[0];
+  }
+  const { rows } = await pool.query(
+    `INSERT INTO user_addresses (user_id, label, city, address, lat, lng)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [userId, label, city || null, address || null, lat || null, lng || null]
+  );
+  return rows[0];
+}
+
+async function deleteAddress(userId, id) {
+  const { rowCount } = await pool.query(
+    `DELETE FROM user_addresses WHERE user_id=$1 AND id=$2`,
+    [userId, id]
+  );
+  return rowCount > 0;
+}
+
+// ── User Profile: Favorite Routes ───────────────────────────
+
+async function listFavoriteRoutes(userId, limit = 10) {
+  const { rows } = await pool.query(
+    `SELECT start_city, end_city, use_count, last_used_at
+     FROM user_favorite_routes WHERE user_id=$1
+     ORDER BY use_count DESC, last_used_at DESC
+     LIMIT $2`,
+    [userId, limit]
+  );
+  return rows;
+}
+
+async function recordRouteUse(userId, startCity, endCity) {
+  if (!userId || !startCity || !endCity) return;
+  await pool.query(
+    `INSERT INTO user_favorite_routes (user_id, start_city, end_city, use_count, last_used_at)
+     VALUES ($1, $2, $3, 1, NOW())
+     ON CONFLICT (user_id, start_city, end_city)
+     DO UPDATE SET use_count = user_favorite_routes.use_count + 1, last_used_at = NOW()`,
+    [userId, startCity, endCity]
+  );
+}
+
+// ── User Profile: Boarding Preferences ──────────────────────
+
+async function listBoardingPrefs(userId) {
+  const { rows } = await pool.query(
+    `SELECT city, station, updated_at FROM user_boarding_prefs WHERE user_id=$1 ORDER BY updated_at DESC`,
+    [userId]
+  );
+  return rows;
+}
+
+async function setBoardingPref(userId, city, station) {
+  await pool.query(
+    `INSERT INTO user_boarding_prefs (user_id, city, station, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (user_id, city) DO UPDATE SET station=$3, updated_at=NOW()`,
+    [userId, city, station]
+  );
+}
+
+async function deleteBoardingPref(userId, city) {
+  await pool.query(
+    `DELETE FROM user_boarding_prefs WHERE user_id=$1 AND city=$2`,
+    [userId, city]
+  );
 }
 
 async function close() {
@@ -687,6 +891,10 @@ module.exports = {
   saveOrder, getOrderById, listOrders, updateOrderStatus,
   startCrawlLog, finishCrawlLog, failCrawlLog, getCrawlLogs,
   getMonitorOverview, getDataCoverage, getDataAnomalies, getCrawlerHealth,
+  listPassengers, createPassenger, updatePassenger, deletePassenger,
+  listAddresses, upsertAddress, deleteAddress,
+  listFavoriteRoutes, recordRouteUse,
+  listBoardingPrefs, setBoardingPref, deleteBoardingPref,
   migrate, close,
 };
 
