@@ -181,7 +181,8 @@ Page({
     const startTs = Date.now();
     try {
       const token = wx.getStorageSync('token') || '';
-      const baseUrl = (getApp() && getApp().globalData.baseUrl) || 'http://localhost:3000';
+      const apiUtil = require('../../utils/api');
+      const baseUrl = apiUtil.getBaseUrl();
       console.log('[stt] uploading to:', `${baseUrl}/api/stt`, 'file:', filePath);
 
       const res = await new Promise((resolve, reject) => {

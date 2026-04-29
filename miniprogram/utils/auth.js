@@ -1,10 +1,22 @@
+const FALLBACK_BASE_URL = 'https://yuecx-assistant.onrender.com';
+
 function _app() { return getApp(); }
+
+function _resolveBaseUrl() {
+  const app = _app();
+  if (app && app.globalData && app.globalData.baseUrl) return app.globalData.baseUrl;
+  const stored = wx.getStorageSync('baseUrl');
+  if (stored && stored.indexOf('localhost') === -1 && stored.indexOf('127.0.0.1') === -1) {
+    return stored;
+  }
+  return FALLBACK_BASE_URL;
+}
 
 function silentLogin() {
   return new Promise((resolve, reject) => {
-    const app = _app();
     const token = wx.getStorageSync('token');
     if (token) {
+      const app = _app();
       if (app) {
         app.globalData.token = token;
         app.globalData.openid = wx.getStorageSync('openid') || '';
@@ -21,12 +33,14 @@ function silentLogin() {
           return;
         }
 
-        const baseUrl = (app && app.globalData.baseUrl) || 'http://localhost:3000';
+        const baseUrl = _resolveBaseUrl();
+        console.log('[auth] silentLogin → POST', `${baseUrl}/api/wx-login`);
         wx.request({
           url: `${baseUrl}/api/wx-login`,
           method: 'POST',
           data: { code: loginRes.code },
           header: { 'Content-Type': 'application/json' },
+          timeout: 90000,
           success(res) {
             if (res.statusCode === 200 && res.data.token) {
               const a = _app();
@@ -38,10 +52,14 @@ function silentLogin() {
               wx.setStorageSync('openid', res.data.openid || '');
               resolve(res.data);
             } else {
+              console.warn('[auth] login non-200 or no token:', res.statusCode, res.data);
               reject(new Error((res.data && res.data.error) || '登录失败'));
             }
           },
-          fail: reject,
+          fail(err) {
+            console.error('[auth] login request failed:', err && err.errMsg);
+            reject(err);
+          },
         });
       },
       fail: reject,

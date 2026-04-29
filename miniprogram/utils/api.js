@@ -1,8 +1,15 @@
+const FALLBACK_BASE_URL = 'https://yuecx-assistant.onrender.com';
+
 function _app() { return getApp(); }
 
 function getBaseUrl() {
   const app = _app();
-  return (app && app.globalData.baseUrl) || 'http://localhost:3000';
+  if (app && app.globalData && app.globalData.baseUrl) return app.globalData.baseUrl;
+  const stored = wx.getStorageSync('baseUrl');
+  if (stored && stored.indexOf('localhost') === -1 && stored.indexOf('127.0.0.1') === -1) {
+    return stored;
+  }
+  return FALLBACK_BASE_URL;
 }
 
 function request(options) {
@@ -117,4 +124,4 @@ function streamPost(url, data, onEvent, options = {}) {
   });
 }
 
-module.exports = { request, post, get, streamPost };
+module.exports = { request, post, get, streamPost, getBaseUrl };
