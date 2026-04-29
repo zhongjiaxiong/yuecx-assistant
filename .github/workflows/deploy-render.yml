@@ -32,9 +32,12 @@ jobs:
           cat /tmp/body || true
           echo
 
-          if [ "$response" != "200" ] && [ "$response" != "201" ]; then
-            echo "::error::Render deploy hook returned non-success status."
-            exit 1
-          fi
+          case "$response" in
+            2*) echo "Render accepted the request (HTTP $response)." ;;
+            *)
+              echo "::error::Render deploy hook returned non-success status: HTTP $response"
+              exit 1
+              ;;
+          esac
 
           echo "Render deploy successfully triggered."
