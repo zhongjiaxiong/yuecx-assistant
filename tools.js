@@ -7,7 +7,7 @@
  */
 
 const db = require("./db");
-const { scoreAndRank, ADCODE_DISTRICT } = require("./scorer");
+const { scoreAndRank, ADCODE_DISTRICT, districtLabelForMiniapp, inferDistrictAdcodeFromStationName } = require("./scorer");
 const { requestGETv1, crawlOnDemand } = require("./crawler");
 const { crawlBusbossOnDemand } = require("./busboss_crawler");
 const { getValidToken } = require("./token_manager");
@@ -430,6 +430,28 @@ async function refreshCache({ startCity, endCity, days }) {
 
 // ── Tool 7: book_interval ───────────────────────────────────
 
+/** 会话里高德反查的区县 adcode，补全 DB 站点只有市级 adcode 的情况（与粤出行「南山区」一致） */
+function mergeGpsDistrictAdcode(station, startCity, ctx) {
+  if (!station) return station;
+  const geo = ctx?.session?.locationResolved;
+  if (!geo || !geo.adcode) return station;
+  const gcity = String(geo.city || "").replace(/市$/, "");
+  const scity = String(startCity || "").replace(/市$/, "");
+  if (gcity && scity && gcity !== scity) return station;
+  const ad = String(geo.adcode);
+  if (!ADCODE_DISTRICT[ad]) return station;
+  const cur = String(station.adcode || "");
+  if (cur && ADCODE_DISTRICT[cur]) return station;
+  return { ...station, adcode: ad };
+}
+
+function enrichDropoffDistrictFromName(station) {
+  if (!station) return station;
+  if (station.adcode && ADCODE_DISTRICT[String(station.adcode)]) return station;
+  const inferred = inferDistrictAdcodeFromStationName(station.name);
+  return inferred ? { ...station, adcode: inferred } : station;
+}
+
 async function bookInterval({ date, startCity, endCity, intervalId, rank, boardingStationName, dropoffStationName }, _userId, ctx) {
   // Rank fallback: if caller gave a small integer (like LLM passing "1" from "订第1班"),
   // resolve it against the most recent score_and_rank in this session.
@@ -492,17 +514,22 @@ async function bookInterval({ date, startCity, endCity, intervalId, rank, boardi
 
   // 全/半角括号差异、空白差异会让 includes() 失败，做一次规范化
   const norm = (s) => String(s || "").replace(/[（）()\s]/g, "");
-  const boarding = (iv.boarding_stations || []).find((s) => {
+  let boarding = (iv.boarding_stations || []).find((s) => {
     if (!boardingStationName) return true;
     const a = norm(s.name), b = norm(boardingStationName);
     return a === b || a.includes(b) || b.includes(a);
   }) || (iv.boarding_stations || [])[0];
 
-  const dropoff = (iv.dropoff_stations || []).find((s) => {
+  let dropoff = (iv.dropoff_stations || []).find((s) => {
     if (!dropoffStationName) return true;
     const a = norm(s.name), b = norm(dropoffStationName);
     return a === b || a.includes(b) || b.includes(a);
   }) || (iv.dropoff_stations || [])[0];
+
+  if (matchedSource === "yuecx") {
+    boarding = mergeGpsDistrictAdcode(boarding, startCity, ctx);
+    dropoff = enrichDropoffDistrictFromName(dropoff);
+  }
 
   // 粤出行 interval.getListByCityIdAndLocationId **支持逗号分隔的 locationIds**（实测过）。
   // 每个"站点名"实际在粤出行的 locationId 空间里可能对应数十个子线路 variant，name-matching
@@ -537,9 +564,6 @@ async function bookInterval({ date, startCity, endCity, intervalId, rank, boardi
         }
       }
       // 用 GPS adcode → 区名 过滤同区候选，减少不相关干扰
-      const boardDisName = boarding && ADCODE_DISTRICT[boarding.adcode];
-      const dropDisName = dropoff && ADCODE_DISTRICT[dropoff.adcode];
-
       // 计算 2 层候选集合：
       //   - strict: 严格名字匹配，用于 interval.getListByCityIdAndLocationId（要真同子线路）
       //   - broad:  匹配不到就全量，用于 URL 兜底（用户到 interval 列表页自选）
@@ -569,7 +593,7 @@ async function bookInterval({ date, startCity, endCity, intervalId, rank, boardi
           // 严格集（严格匹配到的候选，供 queryBookableIntervals 用）
           strictIds: bStrictIds,
           // 显示名用区名（用户原话："上下车点其实只是提示"），避免 URL 塞一堆站名
-          name: boardDisName ? `${boardDisName}` : (boarding?.name || ""),
+          name: districtLabelForMiniapp(boarding?.adcode) || (boarding?.name || ""),
         };
       }
       if (dBroadIds) {
@@ -578,7 +602,7 @@ async function bookInterval({ date, startCity, endCity, intervalId, rank, boardi
           id: dBroadIds,
           code: dBroadIds,
           strictIds: dStrictIds,
-          name: dropDisName ? `${dropDisName}` : (dropoff?.name || ""),
+          name: districtLabelForMiniapp(dropoff?.adcode) || (dropoff?.name || ""),
         };
       }
     } catch (e) {

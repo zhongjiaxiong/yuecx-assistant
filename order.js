@@ -8,7 +8,16 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const db = require("./db");
-const { ADCODE_DISTRICT } = require("./scorer");
+const { ADCODE_DISTRICT, districtLabelForMiniapp } = require("./scorer");
+
+/** 粤出行 interval 页只认单个 locationId；逗号列表会被整串解析导致「无班次」 */
+function miniappLocationId(boarding) {
+  const raw = boarding && (boarding.id || boarding.code);
+  if (raw == null || raw === "") return "";
+  const s = String(raw).trim();
+  if (s.includes(",")) return "";
+  return s;
+}
 
 const YUECX_APPID = "wx44d254291f27af7c";
 
@@ -212,21 +221,34 @@ function generateMiniappPath(source, opts = {}) {
 
   if (source === "yuecx") {
     // 基础 13 个字段（list 页 + fill 页都要用）
+    const beginAddrId = miniappLocationId(boarding);
+    const endAddrId = miniappLocationId(dropoff);
+    const beginDisNm = districtLabelForMiniapp(boarding && boarding.adcode)
+      || ((boarding && ADCODE_DISTRICT[boarding.adcode]) || "");
+    const endDisNm = districtLabelForMiniapp(dropoff && dropoff.adcode)
+      || ((dropoff && ADCODE_DISTRICT[dropoff.adcode]) || "");
+    const beginAddrNm = beginAddrId
+      ? ((boarding && boarding.name) || "")
+      : (beginDisNm || (boarding && boarding.name) || "");
+    const endAddrNm = endAddrId
+      ? ((dropoff && dropoff.name) || "")
+      : (endDisNm || (dropoff && dropoff.name) || "");
+
     const base = {
       corpid: "ycx",
       tripDate: date || "",
       beginCityCode: startCityId || "",
       beginCityName: startCityName || "",
       beginDisCode: (boarding && boarding.adcode) || "",
-      beginDisName: (boarding && ADCODE_DISTRICT[boarding.adcode]) || "",
-      beginAddressCode: (boarding && (boarding.id || boarding.code)) || "",
-      beginAddressName: (boarding && boarding.name) || "",
+      beginDisName: beginDisNm,
+      beginAddressCode: beginAddrId,
+      beginAddressName: beginAddrNm,
       endCityCode: endCityId || "",
       endCityName: endCityName || "",
       endDisCode: (dropoff && dropoff.adcode) || "",
-      endDisName: (dropoff && ADCODE_DISTRICT[dropoff.adcode]) || "",
-      endAddressCode: (dropoff && (dropoff.id || dropoff.code)) || "",
-      endAddressName: (dropoff && dropoff.name) || "",
+      endDisName: endDisNm,
+      endAddressCode: endAddrId,
+      endAddressName: endAddrNm,
     };
 
     // 直跳 fillorder 实测无法带出粤出行的富模板（缺 sourceid/openid 等运行时态），

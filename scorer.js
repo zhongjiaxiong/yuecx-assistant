@@ -39,6 +39,27 @@ const ADCODE_DISTRICT = {
   "440311": "光明",
 };
 
+/** 粤出行 interval 页标题/区名用「天河区」「南山区」等形式，与官方小程序一致 */
+function districtLabelForMiniapp(adcode) {
+  if (!adcode) return "";
+  const short = ADCODE_DISTRICT[String(adcode)];
+  if (!short) return "";
+  if (/[区县市]$/.test(short)) return short;
+  return `${short}区`;
+}
+
+/** 从站点名反推区县 adcode（长区名优先，避免「龙华」误伤「龙」） */
+function inferDistrictAdcodeFromStationName(name) {
+  const n = String(name || "");
+  if (!n) return "";
+  const pairs = Object.entries(ADCODE_DISTRICT).sort((a, b) => b[1].length - a[1].length);
+  for (const [code, short] of pairs) {
+    if (!short) continue;
+    if (n.includes(short + "区") || n.includes(short)) return code;
+  }
+  return "";
+}
+
 function timeToMinutes(t) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
@@ -267,4 +288,10 @@ function scoreAndRank(opts) {
   };
 }
 
-module.exports = { scoreAndRank, haversine, ADCODE_DISTRICT };
+module.exports = {
+  scoreAndRank,
+  haversine,
+  ADCODE_DISTRICT,
+  districtLabelForMiniapp,
+  inferDistrictAdcodeFromStationName,
+};
