@@ -452,6 +452,20 @@ function enrichDropoffDistrictFromName(station) {
   return inferred ? { ...station, adcode: inferred } : station;
 }
 
+function pickAreaMeta(candidates, fallbackAdcode) {
+  const withArea = (candidates || []).find((l) => l.areaId);
+  if (withArea) {
+    return {
+      areaId: withArea.areaId,
+      areaName: withArea.areaName || districtLabelForMiniapp(fallbackAdcode) || "",
+    };
+  }
+  return {
+    areaId: fallbackAdcode || "",
+    areaName: districtLabelForMiniapp(fallbackAdcode) || "",
+  };
+}
+
 async function bookInterval({ date, startCity, endCity, intervalId, rank, boardingStationName, dropoffStationName }, _userId, ctx) {
   // Rank fallback: if caller gave a small integer (like LLM passing "1" from "订第1班"),
   // resolve it against the most recent score_and_rank in this session.
@@ -586,23 +600,29 @@ async function bookInterval({ date, startCity, endCity, intervalId, rank, boardi
       const dBroadIds = dBroad.slice(0, 40).map((l) => l.id).join(",");
 
       if (bBroadIds) {
+        const area = pickAreaMeta(bBroad, boarding?.adcode);
         resolvedBoarding = {
           ...boarding,
           id: bBroadIds,
           code: bBroadIds,
+          areaId: area.areaId,
+          areaName: area.areaName,
           // 严格集（严格匹配到的候选，供 queryBookableIntervals 用）
           strictIds: bStrictIds,
           // 显示名用区名（用户原话："上下车点其实只是提示"），避免 URL 塞一堆站名
-          name: districtLabelForMiniapp(boarding?.adcode) || (boarding?.name || ""),
+          name: area.areaName || districtLabelForMiniapp(boarding?.adcode) || (boarding?.name || ""),
         };
       }
       if (dBroadIds) {
+        const area = pickAreaMeta(dBroad, dropoff?.adcode);
         resolvedDropoff = {
           ...dropoff,
           id: dBroadIds,
           code: dBroadIds,
+          areaId: area.areaId,
+          areaName: area.areaName,
           strictIds: dStrictIds,
-          name: districtLabelForMiniapp(dropoff?.adcode) || (dropoff?.name || ""),
+          name: area.areaName || districtLabelForMiniapp(dropoff?.adcode) || (dropoff?.name || ""),
         };
       }
     } catch (e) {

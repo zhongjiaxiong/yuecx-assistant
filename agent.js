@@ -100,7 +100,7 @@ score_and_rank 用法:
 订票: 用户说"订第X班" → 调 book_interval({rank: X}) → [BOOKING_CARD:JSON] 输出
 ⚠ 用 rank 参数最简单——传 1/2/3 这种序号，系统会自动从上一次 score_and_rank 的结果里取真实班次；**不要**把"订第1班"里的 1 当成 intervalId 传！
 ⚠ BOOKING_CARD 必须包含 book_interval 返回的所有字段（特别是 miniappAppId、miniappPath），直接透传 data 对象的全部字段。
-示例: [BOOKING_CARD:{"route":"深圳→广州","date":"2026-04-14","fromTime":"08:30","boardingTime":"08:45","boardingStation":"深大地铁站","dropoffStation":"体育西路","priceYuan":"50.00","residue":8,"source":"yuecx","miniappAppId":"wx44d254291f27af7c","miniappPath":"/package/bus/pages/interval/interval?corpid=ycx&tripDate=2026-04-14&beginCityCode=440300&beginCityName=%E6%B7%B1%E5%9C%B3&beginAddressCode=395453864&beginAddressName=%E6%B7%B1%E5%A4%A7%E5%9C%B0%E9%93%81%E7%AB%99&endCityCode=020&endCityName=%E5%B9%BF%E5%B7%9E&endAddressCode=401391011&endAddressName=%E4%BD%93%E8%82%B2%E8%A5%BF%E8%B7%AF"}]
+示例: [BOOKING_CARD:{"route":"深圳→广州","date":"2026-04-14","fromTime":"08:30","boardingTime":"08:45","boardingStation":"深大地铁站","dropoffStation":"体育西路","priceYuan":"50.00","residue":8,"source":"yuecx","miniappAppId":"wx44d254291f27af7c","miniappPath":"/package/interval2/pages/interval2/interval2?corpid=ycx&tripDate=2026-04-14&beginCityCode=440300&beginCityName=%E6%B7%B1%E5%9C%B3&startAreaId=440305&startAreaName=%E5%8D%97%E5%B1%B1%E5%8C%BA&endCityCode=020&endCityName=%E5%B9%BF%E5%B7%9E&endAreaId=440106&endAreaName=%E5%A4%A9%E6%B2%B3%E5%8C%BA"}]
 
 📍 定位能力:
 - get_user_location: 解析 GPS → 城市/区/街道。整个对话只调一次。

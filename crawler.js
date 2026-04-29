@@ -129,15 +129,23 @@ async function queryRouteLocations(startCityId, endCityId) {
     locationCache.set(key, empty);
     return empty;
   }
+  const areaById = new Map();
+  for (const area of result.data.area || []) {
+    areaById.set(String(area.ID), area);
+  }
+
   const boarding = [];
   const dropoff = [];
   for (const loc of result.data.location) {
+    const area = areaById.get(String(loc.areaId));
     const rec = {
       id: String(loc.ID),
       name: loc.address || loc.station_addr || "",
       lat: parseFloat(loc.y) || null, // note: API swaps (x=lng, y=lat)
       lng: parseFloat(loc.x) || null,
       city: loc.city || "",
+      areaId: loc.areaId && String(loc.areaId) !== "0" ? String(loc.areaId) : "",
+      areaName: area ? (area.areaName || area.name || area.area || "") : "",
     };
     if (loc.locationType === 0 || loc.locationType === "0") boarding.push(rec);
     else if (loc.locationType === 2 || loc.locationType === "2") dropoff.push(rec);

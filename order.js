@@ -10,15 +10,6 @@ const crypto = require("crypto");
 const db = require("./db");
 const { ADCODE_DISTRICT, districtLabelForMiniapp } = require("./scorer");
 
-/** 粤出行 interval 页只认单个 locationId；逗号列表会被整串解析导致「无班次」 */
-function miniappLocationId(boarding) {
-  const raw = boarding && (boarding.id || boarding.code);
-  if (raw == null || raw === "") return "";
-  const s = String(raw).trim();
-  if (s.includes(",")) return "";
-  return s;
-}
-
 const YUECX_APPID = "wx44d254291f27af7c";
 
 // 订单存储文件
@@ -220,19 +211,16 @@ function generateMiniappPath(source, opts = {}) {
   } = opts;
 
   if (source === "yuecx") {
-    // 基础 13 个字段（list 页 + fill 页都要用）
-    const beginAddrId = miniappLocationId(boarding);
-    const endAddrId = miniappLocationId(dropoff);
+    // 粤出行新版入口使用区级 startAreaId/endAreaId 筛选班次。
+    // 站点级 beginAddressCode/endAddressCode 容易命中过窄的子线路，导致“无可预订班次”。
     const beginDisNm = districtLabelForMiniapp(boarding && boarding.adcode)
       || ((boarding && ADCODE_DISTRICT[boarding.adcode]) || "");
     const endDisNm = districtLabelForMiniapp(dropoff && dropoff.adcode)
       || ((dropoff && ADCODE_DISTRICT[dropoff.adcode]) || "");
-    const beginAddrNm = beginAddrId
-      ? ((boarding && boarding.name) || "")
-      : (beginDisNm || (boarding && boarding.name) || "");
-    const endAddrNm = endAddrId
-      ? ((dropoff && dropoff.name) || "")
-      : (endDisNm || (dropoff && dropoff.name) || "");
+    const startAreaId = (boarding && (boarding.areaId || boarding.adcode)) || "";
+    const endAreaId = (dropoff && (dropoff.areaId || dropoff.adcode)) || "";
+    const startAreaName = (boarding && boarding.areaName) || beginDisNm || "";
+    const endAreaName = (dropoff && dropoff.areaName) || endDisNm || "";
 
     const base = {
       corpid: "ycx",
@@ -241,20 +229,24 @@ function generateMiniappPath(source, opts = {}) {
       beginCityName: startCityName || "",
       beginDisCode: (boarding && boarding.adcode) || "",
       beginDisName: beginDisNm,
-      beginAddressCode: beginAddrId,
-      beginAddressName: beginAddrNm,
+      beginAddressCode: "",
+      beginAddressName: "请选择上车站点",
+      startAreaId,
+      startAreaName,
       endCityCode: endCityId || "",
       endCityName: endCityName || "",
       endDisCode: (dropoff && dropoff.adcode) || "",
       endDisName: endDisNm,
-      endAddressCode: endAddrId,
-      endAddressName: endAddrNm,
+      endAddressCode: "",
+      endAddressName: "请选择下车站点",
+      endAreaId,
+      endAreaName,
     };
 
     // 直跳 fillorder 实测无法带出粤出行的富模板（缺 sourceid/openid 等运行时态），
     // 页面会退化到空白模板。改为统一跳班次列表页，由用户点"立即预订"进入富模板。
     // 保留 fillorder 代码路径（上方 bookable 解构仍有效），只是不再使用它的返回。
-    return `/package/bus/pages/interval/interval?${new URLSearchParams(base).toString()}`;
+    return `/package/interval2/pages/interval2/interval2?${new URLSearchParams(base).toString()}`;
   }
   if (source === "busboss") {
     return `pages/booking/index?lineClassDayGID=${intervalId || ""}&classDate=${date || ""}`;
