@@ -178,9 +178,12 @@ Page({
 
   async _uploadVoice(filePath) {
     this.setData({ loading: true, loadingStep: -1, loadingText: '语音识别中...' });
+    const startTs = Date.now();
     try {
       const token = wx.getStorageSync('token') || '';
       const baseUrl = (getApp() && getApp().globalData.baseUrl) || 'http://localhost:3000';
+      console.log('[stt] uploading to:', `${baseUrl}/api/stt`, 'file:', filePath);
+
       const res = await new Promise((resolve, reject) => {
         wx.uploadFile({
           url: `${baseUrl}/api/stt`,
@@ -188,23 +191,57 @@ Page({
           name: 'audio',
           formData: { format: 'mp3' },
           header: token ? { Authorization: `Bearer ${token}` } : {},
+          timeout: 90000,
           success: (r) => resolve(r),
           fail: reject,
         });
       });
-      const data = JSON.parse(res.data);
+
+      const cost = Date.now() - startTs;
+      console.log(`[stt] response: status=${res.statusCode} cost=${cost}ms body.len=${(res.data || '').length}`);
+
+      if (res.statusCode !== 200) {
+        this.setData({ loading: false });
+        const isCold = cost > 30000;
+        wx.showToast({
+          title: isCold ? '后端唤醒超时，请稍后重试' : `服务异常 (${res.statusCode})`,
+          icon: 'none',
+          duration: 2500,
+        });
+        return;
+      }
+
+      let data;
+      try { data = JSON.parse(res.data); }
+      catch (e) {
+        console.error('[stt] body not JSON:', res.data && res.data.slice(0, 200));
+        this.setData({ loading: false });
+        wx.showToast({ title: '后端响应异常', icon: 'none' });
+        return;
+      }
+
       if (data.text) {
         this._addMessage('user', data.text);
         this._scrollToBottom();
         await this._callChat(data.text);
       } else {
         this.setData({ loading: false });
-        wx.showToast({ title: '未识别到语音', icon: 'none' });
+        wx.showToast({
+          title: data.error || '未识别到语音',
+          icon: 'none',
+          duration: 2000,
+        });
       }
     } catch (err) {
-      console.error('[stt] error:', err);
+      const cost = Date.now() - startTs;
+      const errMsg = (err && err.errMsg) || String(err);
+      console.error(`[stt] upload failed after ${cost}ms:`, errMsg);
       this.setData({ loading: false });
-      wx.showToast({ title: '语音识别失败', icon: 'none' });
+
+      let title = '语音识别失败';
+      if (errMsg.includes('timeout')) title = '网络超时，请重试';
+      else if (errMsg.includes('fail')) title = '网络连接失败';
+      wx.showToast({ title, icon: 'none', duration: 2500 });
     }
   },
 

@@ -38,9 +38,6 @@
   "permission": {
     "scope.userLocation": {
       "desc": "用于推荐离你最近的上车站点"
-    },
-    "scope.record": {
-      "desc": "用于语音输入查询班次"
     }
   },
   "requiredPrivateInfos": ["getLocation", "chooseLocation"],

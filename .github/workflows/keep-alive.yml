@@ -1,0 +1,34 @@
+name: Keep Render Awake
+
+on:
+  schedule:
+    - cron: '*/14 0-15 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: render-keep-alive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    name: Ping /api/health
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Wake Render service
+        run: |
+          URL="https://yuecx-assistant.onrender.com/api/health"
+          echo "Pinging $URL"
+          start=$(date +%s)
+          response=$(curl -sS -o /tmp/body -w "%{http_code}" --max-time 90 --retry 2 --retry-delay 5 "$URL" || echo "000")
+          end=$(date +%s)
+          cost=$((end - start))
+          echo "HTTP $response in ${cost}s"
+          echo "Body: $(cat /tmp/body 2>/dev/null | head -c 200)"
+          case "$response" in
+            2*) echo "::notice::Service awake (HTTP $response, ${cost}s)" ;;
+            *) echo "::warning::Unexpected response: HTTP $response (${cost}s)" ;;
+          esac
